@@ -65,15 +65,17 @@
     var finish = bounded(done);
     try {
       api().getAppsInfo(function (list) {
-        var known = {}, seen = {}, result = [];
+        var known = {}, seen = {}, result = [], youtubeApp = list.some(function (a) { return a.id === IDS.youtube; });
         Object.keys(IDS).forEach(function (brand) { known[IDS[brand]] = brand; });
+        /* Some regions ship YouTube only under the Cobalt ID. */
+        if (!youtubeApp) known['com.samsung.tv.cobalt-yt'] = 'youtube';
         list.forEach(function (a) {
           Object.keys(NAMES).forEach(function (brand) { if (!known[a.id] && a.name && NAMES[brand].test(a.name)) known[a.id] = brand; });
           var primary = !!known[a.id], stream = STREAMING.indexOf(a.id) >= 0;
           var consumer = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(a.id) || CONSUMER_SYSTEM.indexOf(a.id) >= 0;
           if (a.id === SELF || INTERNAL.indexOf(a.id) >= 0 || seen[a.id] || !a.name || (!primary && !stream && (!a.show || !consumer))) return;
           if (!primary && /(?:service|worker|preview|promotion|plugin|launcher|test|sdk|^ep[ -]|factory|daemon)/i.test(a.name + ' ' + a.id)) return;
-          if (/-dummy$/.test(a.id) || a.id === 'com.samsung.tv.cobalt-yt') return;
+          if (/-dummy$/.test(a.id) || (a.id === 'com.samsung.tv.cobalt-yt' && youtubeApp)) return;
           seen[a.id] = true;
           result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? (IDS[known[a.id]] ? Object.keys(IDS).indexOf(known[a.id]) : 0) : (stream ? 20 : 30) });
         });
