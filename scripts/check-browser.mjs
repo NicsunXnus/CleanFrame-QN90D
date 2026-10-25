@@ -806,13 +806,27 @@ try {
     check('A missing thumbnail does not prevent applying its full photo', (await state()).committed.wall === target.id && Object.values(await wallpaperBundle()).every(src => src.includes('/' + target.id)));
   });
   await run('First run matches Home to installed apps', async () => {
-    const partial = CATALOG.filter(a => a.id !== 'com.samsung.tv.aria-video' && a.id !== 'org.tizen.apple.apple-music');
-    await page({ seed: undefined, catalog: partial });
-    await current.waitForFunction(() => ShoreQA.state().dock.length === 4);
-    check('Uninstalled default shortcuts are dropped on first run', same((await state()).dock, ['netflix', 'disneyplus', 'youtube', 'primevideo']), (await state()).dock);
-    check('Matched Home is saved', same((await stored()).dock, ['netflix', 'disneyplus', 'youtube', 'primevideo']));
+    const MEWATCH = 'AbCdEf5678.mewatchTV', BREW = 'xvvl3S1bvH.TizenBrewStandalone';
+    const tv = CATALOG.concat([{ id: MEWATCH, name: 'mewatch', show: true, iconPath: '' }, { id: BREW, name: 'TizenBrew', show: true, iconPath: '' }, { id: 'org.tizen.browser', name: 'Internet', show: true, iconPath: '' }]);
+    await page({ seed: undefined, catalog: tv });
+    await current.waitForFunction(() => ShoreQA.state().dock.length === 3);
+    check('Default Home keeps installed defaults and drops Stremio', same((await state()).dock, ['mewatch', 'tizentube', 'browser']), (await state()).dock);
+    check('Matched Home is saved', same((await stored()).dock, ['mewatch', 'tizentube', 'browser']));
+    await act('home.app.mewatch'); await current.waitForFunction(() => __tv.calls.length === 1);
+    check('mewatch launches the ID found by name on this TV', (await current.evaluate(() => __tv.calls.at(-1))).id === MEWATCH);
+    await current.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await act('home.app.tizentube'); await current.waitForFunction(() => __tv.calls.length === 2);
+    const brew = await current.evaluate(() => __tv.calls.at(-1));
+    check('TizenTube opens through TizenBrew app control', brew.method === 'launchAppControl' && brew.id === BREW && JSON.parse(brew.control.data[0].value[0]).moduleName === '@foxreis/tizentube', brew);
+    await current.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await act('home.app.browser'); await current.waitForFunction(() => __tv.calls.length === 3);
+    check('Internet opens the TV browser', (await current.evaluate(() => __tv.calls.at(-1))).id === 'org.tizen.browser');
     await closePage();
-    await page({ seed: baseline({ dock: ['netflix', 'appletv'], lastApp: 'netflix' }), catalog: partial });
+    await page({ seed: undefined, catalog: CATALOG });
+    await current.waitForFunction(() => !ShoreQA.state().catalog.loading && ShoreQA.state().catalog.loaded);
+    check('No installed defaults leaves Home unchanged rather than empty', same((await state()).dock, ['mewatch', 'stremio', 'tizentube', 'browser']), (await state()).dock);
+    await closePage();
+    await page({ seed: baseline({ dock: ['netflix', 'appletv'], lastApp: 'netflix' }), catalog: CATALOG });
     check('Saved Home is never pruned', same((await state()).dock, ['netflix', 'appletv']) && (await current.evaluate(() => __tv.catalogCalls)) === 0);
   });
   await run('Physical-key repeats and Back hierarchy', async () => {

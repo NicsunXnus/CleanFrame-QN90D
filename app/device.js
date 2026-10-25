@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var IDS = {
+    stremio: 'IkWsFHtOY9.Stremio', tizentube: 'xvvl3S1bvH.TizenBrewStandalone', browser: 'org.tizen.browser',
     netflix: 'org.tizen.netflix-app',
     disneyplus: 'MCmYXNxgcu.DisneyPlus', youtube: '9Ur5IzDKqV.TizenYouTube',
     appletv: 'com.samsung.tv.aria-video', primevideo: 'org.tizen.primevideo',
@@ -9,6 +10,8 @@
   };
   /* Ranked after the primary apps in All apps. Confirm IDs from this TV's app list. */
   var STREAMING = ['5b8c3eb16b.BeamCTVDev', '3KA0pm7a7V.TubiTV', 'rJeHak5zRg.Spotify'];
+  /* Apps whose store ID varies by region: matched by name on this TV. */
+  var NAMES = { mewatch: /^me ?watch$/i };
   var CONSUMER_SYSTEM = ['org.tizen.browser', 'com.microsoft.copilot'];
   var EXTRA_BRANDS = {'rJeHak5zRg.Spotify': 'spotify', '5b8c3eb16b.BeamCTVDev': 'hbomax', '3KA0pm7a7V.TubiTV': 'tubi'};
   var INTERNAL = ['adplatform.ADPlayer', 'WykOS4t4F0.cmsWebApp', '25emanual3.emanual',
@@ -45,6 +48,16 @@
       api().launchAppControl(control, 'org.tizen.art-app', function () { finish(null); }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
+  /* TizenBrew opens one of its modules directly when asked through app control. */
+  function launchModule(id, moduleName, done) {
+    if (!api()) { unavailable(done); return; }
+    var finish = bounded(done);
+    try {
+      var data = [new tizen.ApplicationControlData('module', [JSON.stringify({ moduleName: moduleName, moduleType: 'npm', args: '' })])];
+      var control = new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null, data);
+      api().launchAppControl(control, id, function () { finish(null); }, function (err) { finish(failure(err)); });
+    } catch (err) { finish(failure(err)); }
+  }
   function home(done) { launchApp('com.samsung.tv.csfs', done); }
   function settings(done) { launchApp('com.samsung.tv.coba.setting', done); }
   function apps(done) {
@@ -55,18 +68,19 @@
         var known = {}, seen = {}, result = [];
         Object.keys(IDS).forEach(function (brand) { known[IDS[brand]] = brand; });
         list.forEach(function (a) {
+          Object.keys(NAMES).forEach(function (brand) { if (!known[a.id] && a.name && NAMES[brand].test(a.name)) known[a.id] = brand; });
           var primary = !!known[a.id], stream = STREAMING.indexOf(a.id) >= 0;
           var consumer = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(a.id) || CONSUMER_SYSTEM.indexOf(a.id) >= 0;
           if (a.id === SELF || INTERNAL.indexOf(a.id) >= 0 || seen[a.id] || !a.name || (!primary && !stream && (!a.show || !consumer))) return;
           if (!primary && /(?:service|worker|preview|promotion|plugin|launcher|test|sdk|^ep[ -]|factory|daemon)/i.test(a.name + ' ' + a.id)) return;
           if (/-dummy$/.test(a.id) || a.id === 'com.samsung.tv.cobalt-yt') return;
           seen[a.id] = true;
-          result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? Object.keys(IDS).indexOf(known[a.id]) : (stream ? 20 : 30) });
+          result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? (IDS[known[a.id]] ? Object.keys(IDS).indexOf(known[a.id]) : 0) : (stream ? 20 : 30) });
         });
         result.sort(function (a, b) { return a.rank - b.rank || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
         finish(null, result);
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, launchModule: launchModule, art: art, home: home, settings: settings, apps: apps };
 }());
