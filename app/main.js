@@ -14,14 +14,11 @@
   var FULL = 'Home holds nine apps. Remove one first.', LAST = 'Home needs one app';
 
   var PRIMARY_APPS = [
-    { id: 'stremio', name: 'Stremio', mark: true, appId: 'IkWsFHtOY9.Stremio' },
     { id: 'netflix', name: 'Netflix', mark: true, appId: 'org.tizen.netflix-app' },
     { id: 'disneyplus', name: 'Disney+', mark: true, appId: 'MCmYXNxgcu.DisneyPlus' },
     { id: 'youtube', name: 'YouTube', mark: true, appId: '9Ur5IzDKqV.TizenYouTube' },
     { id: 'appletv', name: 'Apple TV', mark: true, appId: 'com.samsung.tv.aria-video' },
     { id: 'primevideo', name: 'Prime Video', mark: true, appId: 'org.tizen.primevideo' },
-    { id: 'abciview', name: 'ABC iview', mark: true, appId: 'mWK87Xghap.ABCiview' },
-    { id: 'sbs', name: 'SBS On Demand', mark: true, appId: 'OyE7OuxlUi.SBSOnDemand' },
     { id: 'applemusic', name: 'Apple Music', mark: true, appId: 'org.tizen.apple.apple-music' }
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
@@ -362,7 +359,7 @@
     return out;
   }
   function initialise() {
-    var saved = load(), initial; S.c = clean(saved); initial = next(S.c.home.slice(), S.c.recent.slice());
+    var saved = load(), initial; S.c = clean(saved); pruneDefault = !saved && !!(window.tizen && window.tizen.application); initial = next(S.c.home.slice(), S.c.recent.slice());
     S.stack = [{ id: 'home', f: { zone: 'apps', u: 0 } }];
     S.sel = S.c.lastApp; S.selIdx = S.c.home.indexOf(S.sel);
     if (saved && initial.mode === 'open') initial.wall = WALLS[(wallIndex(initial.wall) + 1) % WALLS.length].id;
@@ -463,6 +460,18 @@
     S.press = id; S.lastLaunch = a.name;
     perform(a.name, function (done) { FrameDevice.launchApp(a.appId, done); });
   }
+  /* First run on the TV: drop default shortcuts for apps this TV doesn't have. */
+  var pruneDefault = false;
+  function matchHomeToTV() {
+    var keep, c;
+    pruneDefault = false;
+    keep = S.c.home.filter(function (id) { return ALPHA.indexOf(id) >= 0; });
+    if (!keep.length || keep.length === S.c.home.length) return;
+    c = next(keep, without(S.c.recent, ''));
+    c.recent = c.recent.filter(function (id) { return keep.indexOf(id) < 0 && ALPHA.indexOf(id) >= 0; });
+    if (keep.indexOf(c.lastApp) < 0) c.lastApp = keep[0];
+    if (write(c, 'Home matched to installed apps')) { S.sel = c.lastApp; S.selIdx = keep.indexOf(S.sel); }
+  }
   function refreshCatalog() {
     var request, oldFocus;
     if (catalog.loading) return;
@@ -486,20 +495,20 @@
       ALPHA.sort(function (a, b) { return app(a).name.toLowerCase().localeCompare(app(b).name.toLowerCase()); });
       catalog.loaded = true; catalog.error = null; catalog.revision++;
       if (top().id === 'apps' && oldFocus && ALPHA.indexOf(oldFocus) >= 0) top().f.i = ALPHA.indexOf(oldFocus);
+      if (pruneDefault) matchHomeToTV();
       norm(); render();
     });
   }
 
   /* ---------- Navigation targets ---------- */
-  function utils() { return ['art', 'apps', 'settings']; }
+  function utils() { return ['apps', 'settings']; } /* QN90D has no Art Mode */
   /* prev/next run along the apps; out goes to the controls, inn comes back (or to a per-app action). */
   function axes() {
     var v = S.c.layout === 'list';
     return { prev: v ? 'up' : 'left', next: v ? 'down' : 'right', out: v ? 'right' : 'up', inn: v ? 'left' : 'down' };
   }
   function utilAction(u) {
-    if (u === 'art') perform('Art Mode', FrameDevice.art);
-    else if (u === 'apps') openApps();
+    if (u === 'apps') openApps();
     else openSettings();
   }
   function addAppsRoute() { openEditor('home'); }
@@ -1879,4 +1888,5 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  if (pruneDefault) refreshCatalog();
 })();

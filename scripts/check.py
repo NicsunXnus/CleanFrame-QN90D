@@ -10,8 +10,8 @@ manifest = XML.parse(app / 'config.xml').getroot()
 ns = {'w': 'http://www.w3.org/ns/widgets', 't': 'http://tizen.org/ns/widgets'}
 identity = manifest.find('t:application', ns)
 assert identity is not None, 'Missing application identity'
-assert identity.get('package') == 'nClrkHome1', 'Keep the installed package identity stable'
-assert identity.get('id') == 'nClrkHome1.FrameHome', 'Keep the installed application ID stable'
+assert identity.get('package') == 'GzIyAIxWae', 'Keep the installed package identity stable'
+assert identity.get('id') == 'GzIyAIxWae.CleanFrame', 'Keep the installed application ID stable'
 assert manifest.get('version') == json.loads((root / 'package.json').read_text())['version'], 'Manifest/package versions differ'
 for tag in ['content', 'icon']:
     node = manifest.find('w:' + tag, ns)
@@ -41,6 +41,6 @@ for wall in walls:
     for suffix in ['study-soft', 'field-blur', 'field-frost', 'field-clear']:
         assert (app / ('assets/materials/' + wall_id + '-' + suffix + '.jpg')).is_file(), 'Missing registered material: ' + wall_id + '/' + suffix
     assert (app / ('assets/wallpapers/' + wall_id + '-panel.jpg')).is_file(), 'Missing panel backdrop: ' + wall_id
-for icon in ['stremio', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'abciview', 'sbs', 'applemusic', 'art', 'apps', 'settings']:
+for icon in ['netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'applemusic', 'apps', 'settings']:
     assert (app / ('assets/icons/' + icon + '.svg')).is_file(), 'Missing icon: ' + icon
 print('Widget identity, version and bundled resources are valid.')
