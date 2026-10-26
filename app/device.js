@@ -79,6 +79,12 @@
   }
   function home(done) { launchApp('com.samsung.tv.csfs', done); }
   function settings(done) { launchApp('com.samsung.tv.coba.setting', done); }
+  /* TizenBrew Installer's TV app: installs CleanFrame updates from GitHub with Host PC IP left at 127.0.0.1. */
+  function installer(done) {
+    launchApp('xvvl3S1bTI.TizenBrewStandalone', function (err) {
+      done(err ? { message: 'TizenBrew Installer isn\u2019t on this TV yet.', detail: 'Install it once from your PC: Install TizenBrew Installer.' } : null);
+    });
+  }
   function apps(done) {
     if (!api()) { unavailable(done); return; }
     var finish = bounded(done);
@@ -103,5 +109,5 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, art: art, home: home, settings: settings, apps: apps };
 }());
