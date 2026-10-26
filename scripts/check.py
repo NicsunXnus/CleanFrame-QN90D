@@ -13,6 +13,7 @@ assert identity is not None, 'Missing application identity'
 assert identity.get('package') == 'GzIyAIxWae', 'Keep the installed package identity stable'
 assert identity.get('id') == 'GzIyAIxWae.CleanFrame', 'Keep the installed application ID stable'
 assert manifest.get('version') == json.loads((root / 'package.json').read_text())['version'], 'Manifest/package versions differ'
+assert "var VERSION = '" + manifest.get('version') + "';" in (app / 'main.js').read_text(), 'main.js VERSION differs from the manifest'
 for tag in ['content', 'icon']:
     node = manifest.find('w:' + tag, ns)
     assert node is not None and (app / node.get('src', '')).is_file(), 'Missing ' + tag + ' file'

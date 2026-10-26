@@ -597,3 +597,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .is-font-switch .home .ph-name,.is-font-switch .home .clock,.is-font-switch .home .tile .label,.is-font-switch .home .u-label,.is-font-switch .home .app-focus-name,.is-font-switch .home .util-focus-label{animation:font-in 160ms linear}
 @keyframes font-in{from{opacity:0}}
 @media(prefers-reduced-motion:reduce){.is-font-switch .home .ph-name,.is-font-switch .home .clock,.is-font-switch .home .tile .label,.is-font-switch .home .u-label,.is-font-switch .home .app-focus-name,.is-font-switch .home .util-focus-label{animation-duration:120ms}}
+
+/* Optional version line on Home (Settings > About) */
+.version-tag{position:absolute;left:64px;bottom:36px;font-size:22px;line-height:28px;letter-spacing:.2px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
+.version-tag.is-on{opacity:.6}
+.bg-photo .version-tag{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.35)}
+.bg-dark .version-tag{color:#fff}
+.bg-light .version-tag{color:#1d1d1b}

@@ -852,6 +852,25 @@ try {
     check('Apps without app control still open with a plain launch', fallback.method === 'launch' && fallback.id === IDS[2], fallback);
     check('Fallback shows no error', (await current.evaluate(() => ShoreQA.where().view)) !== 'message');
   });
+  await run('About shows the version and toggles it on Home', async () => {
+    const version = JSON.parse(readFileSync(root + 'package.json', 'utf8')).version;
+    await page();
+    const tag = () => current.evaluate(() => { const el = document.getElementById('versionTag'); return { text: el.textContent, on: el.classList.contains('is-on'), opacity: getComputedStyle(el).opacity }; });
+    check('Version line is hidden on Home by default', !(await tag()).on);
+    await scene('settings');
+    check('Settings lists About with the version', (await current.locator('#stage').innerText()).includes('CleanFrame ' + version));
+    await group('about'); await act('choice.versionTag.show');
+    check('Choosing Shown saves the preference', (await stored()).versionTag === 'show');
+    await scene('home'); await current.waitForTimeout(300);
+    const shown = await tag();
+    check('Version line shows on Home', shown.on && shown.text === 'CleanFrame ' + version && Number(shown.opacity) > 0.3, shown);
+    await scene('settings');
+    check('Version line stays off the Settings screen', !(await tag()).on);
+    await current.reload(); await ready();
+    check('Shown survives a reload', (await tag()).on);
+    await group('about'); await act('choice.versionTag.hide'); await scene('home');
+    check('Choosing Hidden removes it from Home', !(await tag()).on && (await stored()).versionTag === 'hide');
+  });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');
     await current.keyboard.down('Enter'); await current.keyboard.down('Enter');
