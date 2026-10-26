@@ -467,7 +467,7 @@
     perform(a.name, function (done) {
       if (!a.appId) done({ message: a.name + ' isn\u2019t installed on this TV.', detail: 'Install it from the Samsung app store, then open All apps once.' });
       else if (a.module) FrameDevice.launchModule(a.appId, a.module, done);
-      else FrameDevice.launchApp(a.appId, done);
+      else FrameDevice.openApp(a.appId, done);
     });
   }
   /* First run on the TV: drop default shortcuts for apps this TV doesn't have. */

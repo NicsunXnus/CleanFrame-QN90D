@@ -77,11 +77,13 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
         if (tv.holdCatalog) tv.pending.push({ ok, fail }); else setTimeout(finish, 0);
       },
       launch(id, ok, fail) {
-        const tv = window.__tv; tv.calls.push({ method: 'launch', id });
+        const tv = window.__tv; tv.calls.push({ method: 'launch', id, viaFallback: !!tv.noAppControl });
         setTimeout(() => tv.launchFailure ? fail({ name: 'NotFoundError', message: 'App unavailable for QA' }) : ok(), 0);
       },
-      launchAppControl(control, id, ok, fail) {
-        const tv = window.__tv; tv.calls.push({ method: 'launchAppControl', id, control });
+      launchAppControl(control, id, ok, fail, reply) {
+        const tv = window.__tv;
+        if (tv.noAppControl && id !== 'xvvl3S1bvH.TizenBrewStandalone') { setTimeout(() => fail({ name: 'NotFoundError', message: 'No app control' }), 0); return; }
+        tv.calls.push({ method: 'launchAppControl', id, control, reply: !!(reply && reply.onsuccess) });
         setTimeout(() => tv.launchFailure ? fail({ name: 'UnknownError', message: 'Screen unavailable for QA' }) : ok(), 0);
       }
     }
@@ -817,7 +819,7 @@ try {
     await current.evaluate(() => window.dispatchEvent(new Event('focus')));
     await act('home.app.tizentube'); await current.waitForFunction(() => __tv.calls.length === 2);
     const brew = await current.evaluate(() => __tv.calls.at(-1));
-    check('TizenTube opens through TizenBrew app control', brew.method === 'launchAppControl' && brew.id === BREW && JSON.parse(brew.control.data[0].value[0]).moduleName === '@foxreis/tizentube', brew);
+    check('TizenTube opens through TizenBrew app control', brew.method === 'launchAppControl' && brew.id === BREW && brew.reply && JSON.parse(brew.control.data[0].value[0]).moduleName === '@foxreis/tizentube', brew);
     await current.evaluate(() => window.dispatchEvent(new Event('focus')));
     await act('home.app.browser'); await current.waitForFunction(() => __tv.calls.length === 3);
     check('Internet opens the TV browser', (await current.evaluate(() => __tv.calls.at(-1))).id === 'org.tizen.browser');
@@ -835,6 +837,17 @@ try {
     await closePage();
     await page({ seed: baseline({ dock: ['netflix', 'appletv'], lastApp: 'netflix' }), catalog: CATALOG });
     check('Saved Home is never pruned', same((await state()).dock, ['netflix', 'appletv']) && (await current.evaluate(() => __tv.catalogCalls)) === 0);
+  });
+  await run('Apps open with CleanFrame as their caller', async () => {
+    await page();
+    await act('home.app.netflix'); await current.waitForFunction(() => __tv.calls.length === 1);
+    const call = await current.evaluate(() => __tv.calls.at(-1));
+    check('App launch asks for a reply so exit can return to CleanFrame', call.method === 'launchAppControl' && call.id === IDS[0] && call.reply, call);
+    await current.evaluate(() => { window.dispatchEvent(new Event('focus')); __tv.noAppControl = true; });
+    await act('home.app.youtube'); await current.waitForFunction(() => __tv.calls.length === 2);
+    const fallback = await current.evaluate(() => __tv.calls.at(-1));
+    check('Apps without app control still open with a plain launch', fallback.method === 'launch' && fallback.id === IDS[2], fallback);
+    check('Fallback shows no error', (await current.evaluate(() => ShoreQA.where().view)) !== 'message');
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');

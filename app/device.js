@@ -35,6 +35,25 @@
     try { api().launch(id, function () { finish(null); }, function (err) { finish(failure(err)); }); }
     catch (err) { finish(failure(err)); }
   }
+  /* Open an app as CleanFrame's callee: asking for a reply makes the TV treat CleanFrame
+     as the caller, so exiting the app can return here instead of to Samsung Home.
+     Apps that refuse app control fall back to a plain launch. */
+  var REPLY = { onsuccess: function () {}, onfailure: function () {} };
+  var NO_APP_CONTROL = ['NotFoundError', 'InvalidValuesError', 'NotSupportedError'];
+  function openApp(id, done) {
+    if (!api()) { unavailable(done); return; }
+    var finish = bounded(done);
+    function plain() {
+      try { api().launch(id, function () { finish(null); }, function (err) { finish(failure(err)); }); }
+      catch (err) { finish(failure(err)); }
+    }
+    try {
+      var control = new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null, []);
+      api().launchAppControl(control, id, function () { finish(null); }, function (err) {
+        if (err && NO_APP_CONTROL.indexOf(err.name) >= 0) plain(); else finish(failure(err));
+      }, REPLY);
+    } catch (err) { plain(); }
+  }
   function launch(brand, done) {
     if (!IDS[brand]) { done({message: 'This app has no launch target.'}); return; }
     launchApp(IDS[brand], done);
@@ -55,7 +74,7 @@
     try {
       var data = [new tizen.ApplicationControlData('module', [JSON.stringify({ moduleName: moduleName, moduleType: 'npm', args: '' })])];
       var control = new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/default', null, null, null, data);
-      api().launchAppControl(control, id, function () { finish(null); }, function (err) { finish(failure(err)); });
+      api().launchAppControl(control, id, function () { finish(null); }, function (err) { finish(failure(err)); }, REPLY);
     } catch (err) { finish(failure(err)); }
   }
   function home(done) { launchApp('com.samsung.tv.csfs', done); }
@@ -84,5 +103,5 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, launchModule: launchModule, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, art: art, home: home, settings: settings, apps: apps };
 }());
