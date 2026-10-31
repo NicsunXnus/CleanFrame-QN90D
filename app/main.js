@@ -19,6 +19,7 @@
     { id: 'stremio', name: 'Stremio', mark: true, appId: 'IkWsFHtOY9.Stremio' },
     { id: 'tizentube', name: 'TizenTube', mark: true, brand: 'youtube', appId: 'xvvl3S1bvH.TizenBrewStandalone', module: '@foxreis/tizentube' },
     { id: 'browser', name: 'Internet', mark: true, appId: 'org.tizen.browser' },
+    { id: 'livetv', name: 'Live TV', mark: true, appId: '' },
     { id: 'netflix', name: 'Netflix', mark: true, appId: 'org.tizen.netflix-app' },
     { id: 'disneyplus', name: 'Disney+', mark: true, appId: 'MCmYXNxgcu.DisneyPlus' },
     { id: 'youtube', name: 'YouTube', mark: true, appId: '9Ur5IzDKqV.TizenYouTube' },
@@ -36,7 +37,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.8.0';
+  var VERSION = '0.8.1';
   var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
@@ -480,7 +481,14 @@
     if (!a.appId && !catalog.loaded) { launchAfterCatalog = id; refreshCatalog(); return; }
     perform(a.name, function (done) {
       if (!a.appId) done({ message: a.name + ' isn\u2019t installed on this TV.', detail: 'Install it from the Samsung app store, then open All apps once.' });
-      else if (a.module) { FrameDevice.stopWatch(); FrameDevice.launchModule(a.appId, a.module, done); }
+      else if (a.module) {
+        /* TizenTube runs inside the TizenBrew app, so watch that app: it closes when TizenTube exits. */
+        FrameDevice.launchModule(a.appId, a.module, function (err) {
+          if (!err && S.c.autoReturn === 'on') FrameDevice.watchApp(a.appId, a.name, function () { FrameDevice.bringBack(); });
+          else FrameDevice.stopWatch();
+          done(err);
+        });
+      }
       else {
         FrameDevice.openApp(a.appId, function (err) {
           if (!err && S.c.autoReturn === 'on') FrameDevice.watchApp(a.appId, a.name, function () { FrameDevice.bringBack(); });

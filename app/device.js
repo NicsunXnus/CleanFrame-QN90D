@@ -11,7 +11,10 @@
   /* Ranked after the primary apps in All apps. Confirm IDs from this TV's app list. */
   var STREAMING = ['5b8c3eb16b.BeamCTVDev', '3KA0pm7a7V.TubiTV', 'rJeHak5zRg.Spotify'];
   /* Apps whose store ID varies by region: matched by name on this TV. */
-  var NAMES = { mewatch: /^me ?watch$/i };
+  var NAMES = { mewatch: /^me ?watch$/i, livetv: /^(live ?tv|tv)$/i };
+  /* Live TV's ID differs between firmware versions: also matched by ID pattern (never Samsung TV Plus). */
+  var ID_MATCH = { livetv: /tv-?viewer|live-?tv/i };
+  var LIVE_HINT = /viewer|tuner|live|channel|epg|source/i;
   var CONSUMER_SYSTEM = ['org.tizen.browser', 'com.microsoft.copilot'];
   var EXTRA_BRANDS = {'rJeHak5zRg.Spotify': 'spotify', '5b8c3eb16b.BeamCTVDev': 'hbomax', '3KA0pm7a7V.TubiTV': 'tubi'};
   var INTERNAL = ['adplatform.ADPlayer', 'WykOS4t4F0.cmsWebApp', '25emanual3.emanual',
@@ -96,6 +99,7 @@
         if (!youtubeApp) known['com.samsung.tv.cobalt-yt'] = 'youtube';
         list.forEach(function (a) {
           Object.keys(NAMES).forEach(function (brand) { if (!known[a.id] && a.name && NAMES[brand].test(a.name)) known[a.id] = brand; });
+          Object.keys(ID_MATCH).forEach(function (brand) { if (!known[a.id] && ID_MATCH[brand].test(a.id) && !/plus/i.test(a.id + ' ' + a.name)) known[a.id] = brand; });
           var primary = !!known[a.id], stream = STREAMING.indexOf(a.id) >= 0;
           var consumer = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(a.id) || CONSUMER_SYSTEM.indexOf(a.id) >= 0;
           if (a.id === SELF || INTERNAL.indexOf(a.id) >= 0 || seen[a.id] || !a.name || (!primary && !stream && (!a.show || !consumer))) return;
@@ -105,6 +109,10 @@
           result.push({ appId: a.id, name: a.name, brand: known[a.id] || EXTRA_BRANDS[a.id] || '', icon: a.iconPath || '', rank: primary ? (IDS[known[a.id]] ? Object.keys(IDS).indexOf(known[a.id]) : 0) : (stream ? 20 : 30) });
         });
         result.sort(function (a, b) { return a.rank - b.rank || a.name.toLowerCase().localeCompare(b.name.toLowerCase()); });
+        /* Diary: which app is Live TV on this TV, and the likely candidates if none matched. */
+        var live = result.filter(function (r) { return r.brand === 'livetv'; })[0];
+        if (live) note('Live TV is ' + live.appId);
+        else note('Live TV not found. Candidates: ' + (list.filter(function (a) { return LIVE_HINT.test(a.id + ' ' + (a.name || '')); }).map(function (a) { return a.id; }).join(', ') || 'none'));
         finish(null, result);
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
@@ -130,11 +138,11 @@
     } catch (err) { note('App events refused: ' + (err && (err.name + ' ' + err.message))); }
     document.addEventListener('visibilitychange', function () { note(document.hidden ? 'CleanFrame hidden' : 'CleanFrame shown'); });
   }());
-  /* Auto-return: the TV sends no event when an app closes, so ask it twice a second whether
+  /* Auto-return: the TV sends no event when an app closes, so ask it about three times a second whether
      the app CleanFrame opened is still running. Once it has gone, call back. Apps that stay
      running in the background (Netflix) never trigger it. Watching ends when CleanFrame is
      shown again or another app is opened from it. */
-  var watch = null, POLL = 500, NEVER_SEEN = 30000, GIVE_UP = 4 * 60 * 60 * 1000;
+  var watch = null, POLL = 300, NEVER_SEEN = 30000, GIVE_UP = 4 * 60 * 60 * 1000;
   function stopWatch(reason) {
     if (!watch) return;
     clearInterval(watch.timer);

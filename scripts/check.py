@@ -42,6 +42,6 @@ for wall in walls:
     for suffix in ['study-soft', 'field-blur', 'field-frost', 'field-clear']:
         assert (app / ('assets/materials/' + wall_id + '-' + suffix + '.jpg')).is_file(), 'Missing registered material: ' + wall_id + '/' + suffix
     assert (app / ('assets/wallpapers/' + wall_id + '-panel.jpg')).is_file(), 'Missing panel backdrop: ' + wall_id
-for icon in ['netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'applemusic', 'apps', 'settings']:
+for icon in ['livetv', 'browser', 'netflix', 'disneyplus', 'youtube', 'appletv', 'primevideo', 'applemusic', 'apps', 'settings']:
     assert (app / ('assets/icons/' + icon + '.svg')).is_file(), 'Missing icon: ' + icon
 print('Widget identity, version and bundled resources are valid.')

@@ -855,6 +855,17 @@ try {
     await act('home.app.mewatch'); await current.waitForFunction(() => __tv.calls.length === 1);
     check('mewatch opens on the first try after a restart', (await current.evaluate(() => __tv.calls.at(-1))).id === MEWATCH);
     await closePage();
+    const LIVE = 'org.tizen.tv-viewer';
+    await page({ seed: baseline({ dock: ['livetv', 'netflix'], lastApp: 'livetv' }), catalog: CATALOG.concat([{ id: 'com.samsung.tv.tvplus', name: 'Samsung TV Plus', show: true, iconPath: '' }, { id: LIVE, name: 'TV Viewer', show: false, iconPath: '' }]) });
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    await act('home.app.livetv'); await current.waitForFunction(() => __tv.calls.length === 1);
+    check('Live TV opens the TV viewer found on this TV (never TV Plus)', (await current.evaluate(() => __tv.calls.at(-1))).id === LIVE, await current.evaluate(() => __tv.calls.at(-1)));
+    check('The diary names the Live TV app', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('Live TV is ' + LIVE));
+    await closePage();
+    await page({ seed: baseline({ dock: ['livetv', 'netflix'], lastApp: 'netflix' }), catalog: CATALOG.concat([{ id: 'com.samsung.tv.channel-list', name: 'Channel List', show: false }]) });
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    check('If Live TV is not recognised, the diary lists likely candidates', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('Live TV not found. Candidates: com.samsung.tv.channel-list'));
+    await closePage();
     await page({ seed: baseline({ dock: ['mewatch', 'netflix'], lastApp: 'mewatch' }), catalog: tv, holdCatalog: true });
     await act('home.app.mewatch');
     check('mewatch pressed before the scan finishes waits instead of erroring', (await current.evaluate(() => ShoreQA.where().view)) !== 'message' && (await current.evaluate(() => __tv.calls.length)) === 0);
@@ -909,6 +920,20 @@ try {
     check('Clear events empties the list', (await current.evaluate(() => FrameDevice.eventLog())).length === 1);
     await current.evaluate(() => __tv.statusCb('com.samsung.tv.csfs', true));
     check('A new event shows up while About is open', (await current.locator('#stage').innerText()).includes('ACTIVE Samsung Home'));
+  });
+  await run('Returns when TizenTube closes', async () => {
+    const SELF = 'GzIyAIxWae.CleanFrame', BREW = 'xvvl3S1bvH.TizenBrewStandalone', returned = () => current.evaluate(id => __tv.calls.some(c => c.id === id), SELF);
+    await page({ seed: baseline({ dock: ['tizentube', 'netflix'], lastApp: 'netflix' }), catalog: CATALOG.concat([{ id: BREW, name: 'TizenBrew', show: true, iconPath: '' }]) });
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    await act('home.app.tizentube'); await current.waitForFunction(() => __tv.calls.length === 1);
+    await current.evaluate(b => { __tv.running = [b]; __setHidden(true); }, BREW);
+    await current.waitForTimeout(1200);
+    check('TizenTube is watched through the TizenBrew app', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('Watching TizenTube'));
+    check('Nothing happens while TizenTube is open', !(await returned()));
+    await current.evaluate(() => { __tv.running = ['xvvl3S1bvH.StandaloneService']; });
+    await current.waitForFunction(id => __tv.calls.some(c => c.id === id), SELF, { timeout: 5000 });
+    check('Closing TizenTube returns to CleanFrame (service left running is ignored)', await returned());
+    await closePage();
   });
   await run('Returns when Internet opened elsewhere closes', async () => {
     const SELF = 'GzIyAIxWae.CleanFrame', returned = () => current.evaluate(id => __tv.calls.some(c => c.id === id), SELF);
