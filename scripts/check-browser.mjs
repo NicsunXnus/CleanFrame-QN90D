@@ -76,6 +76,7 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
         const finish = () => tv.catalogFailure ? fail({ name: 'UnknownError', message: 'Catalogue unavailable for QA' }) : ok(tv.catalog.map(a => ({ ...a })));
         if (tv.holdCatalog) tv.pending.push({ ok, fail }); else setTimeout(finish, 0);
       },
+      addAppStatusChangeListener(cb) { window.__tv.statusCb = cb; return 1; },
       launch(id, ok, fail) {
         const tv = window.__tv; tv.calls.push({ method: 'launch', id, viaFallback: !!tv.noAppControl });
         setTimeout(() => tv.launchFailure ? fail({ name: 'NotFoundError', message: 'App unavailable for QA' }) : ok(), 0);
@@ -883,6 +884,24 @@ try {
     check('Shown survives a reload', (await tag()).on);
     await group('about'); await act('choice.versionTag.hide'); await scene('home');
     check('Choosing Hidden removes it from Home', !(await tag()).on && (await stored()).versionTag === 'hide');
+  });
+  await run('About lists app events for the Netflix test', async () => {
+    await page();
+    await current.evaluate(() => localStorage.removeItem('cleanframe.events.v1'));
+    await current.reload(); await ready();
+    await act('home.app.netflix'); await current.waitForFunction(() => __tv.calls.length === 1);
+    await current.evaluate(() => { window.dispatchEvent(new Event('focus')); __tv.statusCb('org.tizen.netflix-app', true); __tv.statusCb('org.tizen.netflix-app', false); });
+    await group('about');
+    const text = await current.locator('#stage').innerText();
+    check('About shows the listener started', text.includes('Listening for app events'), text.slice(0, 600));
+    check('About shows the app CleanFrame opened', text.includes('Opened Netflix'));
+    check('About shows the Netflix events', text.includes('ACTIVE Netflix') && text.includes('inactive Netflix'));
+    const lines = await current.evaluate(() => FrameDevice.eventLog());
+    check('Events survive in storage', JSON.parse(await current.evaluate(() => localStorage.getItem('cleanframe.events.v1'))).length === lines.length);
+    await act('about.events.clear');
+    check('Clear events empties the list', (await current.evaluate(() => FrameDevice.eventLog())).length === 1);
+    await current.evaluate(() => __tv.statusCb('com.samsung.tv.csfs', true));
+    check('A new event shows up while About is open', (await current.locator('#stage').innerText()).includes('ACTIVE Samsung Home'));
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');

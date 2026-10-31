@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.3';
+  var VERSION = '0.7.4';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
   var FONTS = {
@@ -465,7 +465,7 @@
     var a = app(id), c;
     if (!a || busy) return;
     if (S.c.home.indexOf(id) >= 0) { c = next(S.c.home.slice(), S.c.recent.slice()); c.lastApp = id; write(c, 'Last app'); }
-    S.press = id; S.lastLaunch = a.name;
+    S.press = id; S.lastLaunch = a.name; FrameDevice.note('Opened ' + a.name);
     if (!a.appId && !catalog.loaded) { launchAfterCatalog = id; refreshCatalog(); return; }
     perform(a.name, function (done) {
       if (!a.appId) done({ message: a.name + ' isn\u2019t installed on this TV.', detail: 'Install it from the Samsung app store, then open All apps once.' });
@@ -892,12 +892,23 @@
     ];
     if (t.group === 'rotation') return [{ id: 'mode', title: '', items: options('mode', MODES.map(function (m) { return m.id; }), flat),
       reason: flat ? 'Choose Photo in Background to use rotation.' : 'Timed changes pause while Settings or another panel is open.' }];
-    if (t.group === 'about') return [{ id: 'versionTag', title: 'CleanFrame ' + VERSION + ' \u00b7 version on Home', horizontal: true, items: options('versionTag', ['hide', 'show']) }];
+    if (t.group === 'about') return [{ id: 'versionTag', title: 'CleanFrame ' + VERSION + ' \u00b7 version on Home', horizontal: true, items: options('versionTag', ['hide', 'show']) },
+      { id: 'events', title: 'App events (test, newest first)', items: [{ action: 'about.events.clear', label: 'Clear events' }].concat(
+        FrameDevice.eventLog().slice(-8).reverse().map(function (line, i) { return { action: 'about.event.' + i, label: eventLabel(line) }; })),
+        reason: FrameDevice.eventLog().length ? '' : 'No events yet. Open an app from CleanFrame, leave it, then come back here.' }];
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
       { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' },
       { action: 'samsung.update', label: 'Update CleanFrame', description: 'Opens TizenBrew Installer on this TV' }
     ] }];
+  }
+  /* Event lines name the app where CleanFrame knows it; unknown IDs stay as they are. */
+  var EVENT_NAMES = { 'com.samsung.tv.csfs': 'Samsung Home', 'GzIyAIxWae.CleanFrame': 'CleanFrame', 'xvvl3S1bvH.TizenBrewStandalone': 'TizenBrew' };
+  function eventLabel(line) {
+    return line.replace(/(ACTIVE|inactive) (\S+)$/, function (all, state, id) {
+      var known = EVENT_NAMES[id] || (APPS.filter(function (a) { return a.appId === id; })[0] || {}).name;
+      return state + ' ' + (known || id);
+    });
   }
   function detailRows(t) {
     var rows = [[{ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }]];
@@ -953,6 +964,7 @@
     else if (item.action === 'samsung.home') perform('Samsung Home', FrameDevice.home);
     else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
     else if (item.action === 'samsung.update') perform('Update CleanFrame', FrameDevice.installer);
+    else if (item.action === 'about.events.clear') { FrameDevice.clearEvents(); render(); }
   }
   V.appearance = {
     norm: function (t) {
@@ -1919,6 +1931,7 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  FrameDevice.onEvent(function () { var t = top(); if (t.id === 'appearance' && t.group === 'about') render(); });
   /* Always read the installed apps on the TV at start, so apps found by name (mewatch) have their real ID. */
   if (window.tizen && window.tizen.application) refreshCatalog();
 })();

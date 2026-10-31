@@ -109,5 +109,29 @@
       }, function (err) { finish(failure(err)); });
     } catch (err) { finish(failure(err)); }
   }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, art: art, home: home, settings: settings, apps: apps };
+  /* Test only (0.7.4): record what the TV announces about apps becoming active or inactive,
+     and when CleanFrame itself is shown or hidden. Nothing acts on these yet. */
+  var EVENTS_KEY = 'cleanframe.events.v1', events = [], listeners = [];
+  try { events = JSON.parse(localStorage.getItem(EVENTS_KEY)) || []; } catch (e) { events = []; }
+  function note(text) {
+    var d = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    events.push(pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' \u00b7 ' + text);
+    if (events.length > 40) events = events.slice(events.length - 40);
+    try { localStorage.setItem(EVENTS_KEY, JSON.stringify(events)); } catch (e) {}
+    listeners.forEach(function (fn) { try { fn(); } catch (e) {} });
+  }
+  (function watch() {
+    var a = api();
+    if (!a) return;
+    if (typeof a.addAppStatusChangeListener !== 'function') { note('TV has no app event feature'); return; }
+    try {
+      a.addAppStatusChangeListener(function (id, active) { note((active ? 'ACTIVE ' : 'inactive ') + id); });
+      note('Listening for app events');
+    } catch (err) { note('App events refused: ' + (err && (err.name + ' ' + err.message))); }
+    document.addEventListener('visibilitychange', function () { note(document.hidden ? 'CleanFrame hidden' : 'CleanFrame shown'); });
+  }());
+  function eventLog() { return events.slice(); }
+  function clearEvents() { events = []; try { localStorage.removeItem(EVENTS_KEY); } catch (e) {} note('Events cleared'); }
+  function onEvent(fn) { listeners.push(fn); }
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
 }());
