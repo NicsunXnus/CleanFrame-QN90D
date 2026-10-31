@@ -130,8 +130,41 @@
     } catch (err) { note('App events refused: ' + (err && (err.name + ' ' + err.message))); }
     document.addEventListener('visibilitychange', function () { note(document.hidden ? 'CleanFrame hidden' : 'CleanFrame shown'); });
   }());
+  /* Auto-return: the TV sends no event when an app closes, so ask it every few seconds whether
+     the app CleanFrame opened is still running. Once it has gone, call back. Apps that stay
+     running in the background (Netflix) never trigger it. Watching ends when CleanFrame is
+     shown again or another app is opened from it. */
+  var watch = null, POLL = 2500, NEVER_SEEN = 30000;
+  function stopWatch(reason) {
+    if (!watch) return;
+    clearInterval(watch.timer);
+    if (reason) note(reason);
+    watch = null;
+  }
+  function watchApp(id, name, onClosed) {
+    var a = api();
+    stopWatch();
+    if (!a || typeof a.getAppsContext !== 'function') return;
+    var w = watch = { id: id, seen: false, started: Date.now(), timer: 0 };
+    note('Watching ' + name);
+    w.timer = setInterval(function () {
+      if (watch !== w) return;
+      try {
+        a.getAppsContext(function (list) {
+          if (watch !== w) return;
+          var running = list.some(function (c) { return c.appId === id; });
+          if (running) { w.seen = true; return; }
+          if (!w.seen) { if (Date.now() - w.started > NEVER_SEEN) stopWatch('Stopped watching ' + name + ' (never saw it run)'); return; }
+          stopWatch(name + ' closed, returning');
+          onClosed();
+        }, function () {});
+      } catch (e) { stopWatch('Watching stopped: ' + e.message); }
+    }, POLL);
+  }
+  function bringBack(done) { launchApp(SELF, function (err) { note(err ? 'Return failed: ' + (err.detail || err.message) : 'Returned to CleanFrame'); if (done) done(err); }); }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) stopWatch(); });
   function eventLog() { return events.slice(); }
   function clearEvents() { events = []; try { localStorage.removeItem(EVENTS_KEY); } catch (e) {} note('Events cleared'); }
   function onEvent(fn) { listeners.push(fn); }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, watchApp: watchApp, stopWatch: stopWatch, bringBack: bringBack, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
 }());

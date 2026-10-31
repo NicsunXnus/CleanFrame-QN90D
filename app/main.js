@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.4';
+  var VERSION = '0.7.5';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
   var FONTS = {
@@ -51,7 +51,7 @@
   var LOOK_KEYS = ['bg', 'layout', 'apps', 'font', 'controls', 'focus', 'material'];
   var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] };
   var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', hide: 'Hidden', show: 'Shown' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', hide: 'Hidden', show: 'Shown', on: 'On', off: 'Off' };
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
     leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
@@ -351,7 +351,8 @@
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
       mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'),
-      versionTag: pick(s.versionTag, ['hide', 'show'], 'hide')
+      versionTag: pick(s.versionTag, ['hide', 'show'], 'hide'),
+      autoReturn: pick(s.autoReturn, ['on', 'off'], 'on')
     };
   }
   function serialise(c) {
@@ -376,7 +377,7 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; c.versionTag = S.c.versionTag; return c; }
+  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; c.versionTag = S.c.versionTag; c.autoReturn = S.c.autoReturn; return c; }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -469,8 +470,13 @@
     if (!a.appId && !catalog.loaded) { launchAfterCatalog = id; refreshCatalog(); return; }
     perform(a.name, function (done) {
       if (!a.appId) done({ message: a.name + ' isn\u2019t installed on this TV.', detail: 'Install it from the Samsung app store, then open All apps once.' });
-      else if (a.module) FrameDevice.launchModule(a.appId, a.module, done);
-      else FrameDevice.openApp(a.appId, done);
+      else if (a.module) { FrameDevice.stopWatch(); FrameDevice.launchModule(a.appId, a.module, done); }
+      else {
+        FrameDevice.openApp(a.appId, function (err) {
+          if (!err && S.c.autoReturn === 'on') FrameDevice.watchApp(a.appId, a.name, function () { FrameDevice.bringBack(); });
+          done(err);
+        });
+      }
     });
   }
   /* First run on the TV: drop default shortcuts for apps this TV doesn't have. */
@@ -900,7 +906,8 @@
       { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
       { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' },
       { action: 'samsung.update', label: 'Update CleanFrame', description: 'Opens TizenBrew Installer on this TV' }
-    ] }];
+    ] }, { id: 'autoReturn', title: 'Return here when an app closes', horizontal: true, items: options('autoReturn', ['on', 'off']),
+      reason: 'Works for apps that close (mewatch, Internet, Stremio). Netflix and YouTube stay running, so use Home for those.' }];
   }
   /* Event lines name the app where CleanFrame knows it; unknown IDs stay as they are. */
   var EVENT_NAMES = { 'com.samsung.tv.csfs': 'Samsung Home', 'GzIyAIxWae.CleanFrame': 'CleanFrame', 'xvvl3S1bvH.TizenBrewStandalone': 'TizenBrew' };
@@ -947,6 +954,15 @@
     if (!write(c, 'Version on Home')) S.lookError = { type: 'save', patch: { versionTag: value }, row: 'versionTag', transient: false };
     render();
   }
+  function applyAutoReturn(value) {
+    var c;
+    S.err = null; S.lookError = null;
+    if (value === S.c.autoReturn) return;
+    c = next(S.c.home.slice(), S.c.recent.slice()); c.autoReturn = value;
+    if (!write(c, 'Return when apps close')) S.lookError = { type: 'save', patch: { autoReturn: value }, row: 'autoReturn', transient: false };
+    if (value === 'off') FrameDevice.stopWatch('Auto-return turned off');
+    render();
+  }
   function detailBack() { cancelLook(); S.err = null; pop(); }
   function detailOk(t, item) {
     var patch = {}, error = S.lookError;
@@ -958,10 +974,11 @@
       else if (error) setLook(error.patch, { row: error.row });
     } else if (item.axis === 'mode') applyRotation(item.value);
     else if (item.axis === 'versionTag') applyVersionTag(item.value);
+    else if (item.axis === 'autoReturn') applyAutoReturn(item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
-    else if (item.action === 'samsung.home') perform('Samsung Home', FrameDevice.home);
+    else if (item.action === 'samsung.home') { FrameDevice.stopWatch(); perform('Samsung Home', FrameDevice.home); }
     else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
     else if (item.action === 'samsung.update') perform('Update CleanFrame', FrameDevice.installer);
     else if (item.action === 'about.events.clear') { FrameDevice.clearEvents(); render(); }

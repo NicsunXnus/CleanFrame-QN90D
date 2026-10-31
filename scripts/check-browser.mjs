@@ -77,6 +77,7 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
         if (tv.holdCatalog) tv.pending.push({ ok, fail }); else setTimeout(finish, 0);
       },
       addAppStatusChangeListener(cb) { window.__tv.statusCb = cb; return 1; },
+      getAppsContext(ok) { setTimeout(() => ok((window.__tv.running || []).map(appId => ({ appId }))), 0); },
       launch(id, ok, fail) {
         const tv = window.__tv; tv.calls.push({ method: 'launch', id, viaFallback: !!tv.noAppControl });
         setTimeout(() => tv.launchFailure ? fail({ name: 'NotFoundError', message: 'App unavailable for QA' }) : ok(), 0);
@@ -902,6 +903,40 @@ try {
     check('Clear events empties the list', (await current.evaluate(() => FrameDevice.eventLog())).length === 1);
     await current.evaluate(() => __tv.statusCb('com.samsung.tv.csfs', true));
     check('A new event shows up while About is open', (await current.locator('#stage').innerText()).includes('ACTIVE Samsung Home'));
+  });
+  await run('Returns to CleanFrame when an opened app closes', async () => {
+    const SELF = 'GzIyAIxWae.CleanFrame', returned = () => current.evaluate(id => __tv.calls.some(c => c.id === id), SELF);
+    await page();
+    check('Auto-return is on by default', (await state()).committed.autoReturn === 'on');
+    await act('home.app.netflix'); await current.waitForFunction(() => __tv.calls.length === 1);
+    await current.evaluate(() => { __tv.running = ['org.tizen.netflix-app']; __setHidden(true); });
+    await current.waitForTimeout(3200);
+    check('Nothing happens while the app is still running', !(await returned()));
+    await current.evaluate(() => { __tv.running = []; });
+    await current.waitForFunction(id => __tv.calls.some(c => c.id === id), SELF, { timeout: 8000 });
+    check('CleanFrame brings itself back once the app has closed', await returned());
+    check('The diary records the return', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('Netflix closed, returning'));
+    await closePage();
+    await page();
+    await act('home.app.netflix'); await current.waitForFunction(() => __tv.calls.length === 1);
+    await current.evaluate(() => { __tv.running = ['org.tizen.netflix-app']; __setHidden(true); });
+    await current.waitForTimeout(3000);
+    await current.evaluate(() => { __setHidden(false); __tv.running = []; });
+    await current.waitForTimeout(3500);
+    check('Coming back to CleanFrame yourself stops the watch', !(await returned()));
+    await closePage();
+    await page({ seed: baseline({ autoReturn: 'off' }) });
+    check('The setting can be turned off and is saved', (await state()).committed.autoReturn === 'off');
+    await act('home.app.netflix'); await current.waitForFunction(() => __tv.calls.length === 1);
+    await current.evaluate(() => { __tv.running = ['org.tizen.netflix-app']; __setHidden(true); });
+    await current.waitForTimeout(3000);
+    await current.evaluate(() => { __tv.running = []; });
+    await current.waitForTimeout(3500);
+    check('With auto-return off, nothing happens', !(await returned()));
+    await group('samsung');
+    check('Samsung settings show the auto-return choice', (await current.locator('#stage').innerText()).includes('Return here when an app closes'));
+    await act('choice.autoReturn.on');
+    check('Turning it on saves', (await stored()).autoReturn === 'on');
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');
