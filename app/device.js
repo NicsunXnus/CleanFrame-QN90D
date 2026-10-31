@@ -163,8 +163,69 @@
   }
   function bringBack(done) { launchApp(SELF, function (err) { note(err ? 'Return failed: ' + (err.detail || err.message) : 'Returned to CleanFrame'); if (done) done(err); }); }
   document.addEventListener('visibilitychange', function () { if (!document.hidden) stopWatch(); });
+  /* One-press update: ask TizenBrew Installer's background service on this TV (its local
+     WebSocket on port 8091, the same channel its own screen uses) to install the latest
+     GitHub release. Every failure carries a short "what to try" so the person can fix it. */
+  var INSTALLER_APP = 'xvvl3S1bTI.TizenBrewStandalone', INSTALLER_SERVICE = 'xvvl3S1bTI.InstallerService', INSTALLER_WS = 'ws://127.0.0.1:8091';
+  var UPDATE_STEPS = { 'installStatus.fetching': 'Downloading the latest release from GitHub…', 'installStatus.resigning': 'Signing it with your certificate…',
+    'installStatus.parsing': 'Checking the package…', 'installStatus.installing': 'Installing… CleanFrame will close in a moment.', 'installStatus.installed': 'Installed.' };
+  function updateError(raw, repo) {
+    var text = String(raw || '');
+    if (/debuggingNotEnabled/.test(text)) return { message: 'TizenBrew Installer can’t reach the TV’s developer connection.',
+      detail: 'Check Host PC IP is 127.0.0.1 (Apps > App Settings > 12345), then hold Power until the Samsung logo appears and try again.' };
+    if (/GitHub|release/i.test(text)) return { message: 'Couldn’t get the release from GitHub.',
+      detail: 'Make the repo ' + repo + ' public (GitHub > Settings > Change visibility), check the TV is online, then try again. Or install from a USB stick.' };
+    if (/certificate|author|signature/i.test(text)) return { message: 'The new version’s certificate doesn’t match the installed one.',
+      detail: 'Delete CleanFrame from Apps, then open TizenBrew Installer and use Install from GitHub. Your Home layout resets.' };
+    if (/resign/i.test(text)) return { message: 'TizenBrew Installer couldn’t sign the update.',
+      detail: 'Open TizenBrew Installer, use Install from GitHub once and sign in to Samsung if asked, then try again.' };
+    return { message: 'The update didn’t install.', detail: (text ? text.slice(0, 120) + ' · ' : '') + 'Try Install from GitHub in TizenBrew Installer, or install from a USB stick.' };
+  }
+  function updateFromGitHub(repo, onStatus, done) {
+    var finished = false, socket = null, attempts = 0, started = Date.now(), sentAt = 0, resent = false, timer;
+    function finish(err) { if (finished) return; finished = true; clearInterval(timer); try { if (socket) socket.close(); } catch (e) {} done(err); }
+    if (typeof WebSocket === 'undefined') { finish({ message: 'This TV can’t talk to TizenBrew Installer.', detail: 'Open TizenBrew Installer and use Install from GitHub with ' + repo + '.' }); return; }
+    function send() { sentAt = Date.now(); socket.send(JSON.stringify({ type: 1, payload: { url: repo } })); }
+    function connect() {
+      attempts++;
+      try { socket = new WebSocket(INSTALLER_WS); } catch (e) { socket = null; return; }
+      socket.onopen = function () { onStatus('Asking TizenBrew Installer for the latest release…'); send(); };
+      socket.onmessage = function (event) {
+        var msg; try { msg = JSON.parse(event.data); } catch (e) { return; }
+        if (msg.type === 4) { onStatus(UPDATE_STEPS[msg.payload] || 'Working…'); if (msg.payload === 'installStatus.installed') finish(null); }
+        else if (msg.type === 3) finish(updateError(msg.payload, repo));
+        else if (msg.type === 1 && msg.payload) {
+          if (msg.payload.response === 2) finish({ message: 'TizenBrew Installer has no Samsung certificate yet.',
+            detail: 'Open TizenBrew Installer, use Install from GitHub once and sign in to Samsung, then try again.' });
+          else if (msg.payload.response === 0 && /install failed/i.test(String(msg.payload.result || ''))) finish(updateError(msg.payload.result, repo));
+          else if (msg.payload.response === 0) finish(null);
+        }
+      };
+      socket.onclose = function () { socket = null; };
+      socket.onerror = function () {};
+    }
+    function startInstaller() {
+      var a = api();
+      if (!a) return;
+      try { a.launch(INSTALLER_SERVICE, function () {}, function () {
+        try { a.launch(INSTALLER_APP, function () {}, function (err) {
+          if (err && err.name === 'NotFoundError') finish({ message: 'TizenBrew Installer isn’t on this TV.',
+            detail: 'Install it once from your PC (Install TizenBrew Installer), or update CleanFrame from a USB stick.' });
+        }); } catch (e) {}
+      }); } catch (e) {}
+    }
+    connect();
+    timer = setInterval(function () {
+      if (finished) return;
+      if (!socket && attempts === 1) { onStatus('Starting TizenBrew Installer…'); startInstaller(); }
+      if (!socket && Date.now() - started < 25000) { connect(); return; }
+      if (socket && socket.readyState === 1 && sentAt && !resent && Date.now() - sentAt > 6000) { resent = true; send(); return; }
+      if (Date.now() - started > (sentAt ? 180000 : 25000)) finish({ message: 'TizenBrew Installer didn’t answer.',
+        detail: 'Open TizenBrew Installer once so its service starts, check Host PC IP is 127.0.0.1, then try again. Or use Install from GitHub there.' });
+    }, 1500);
+  }
   function eventLog() { return events.slice(); }
   function clearEvents() { events = []; try { localStorage.removeItem(EVENTS_KEY); } catch (e) {} note('Events cleared'); }
   function onEvent(fn) { listeners.push(fn); }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, watchApp: watchApp, stopWatch: stopWatch, bringBack: bringBack, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, watchApp: watchApp, updateFromGitHub: updateFromGitHub, stopWatch: stopWatch, bringBack: bringBack, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
 }());

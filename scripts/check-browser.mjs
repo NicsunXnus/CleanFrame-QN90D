@@ -258,9 +258,9 @@ try {
     await current.evaluate(() => window.dispatchEvent(new Event('focus'))); await group('samsung'); await act('samsung.settings');
     await current.waitForFunction(() => __tv.calls.length === 4);
     check('TV settings keeps installed target', (await current.evaluate(() => __tv.calls.at(-1))).id === 'com.samsung.tv.coba.setting');
-    await current.evaluate(() => window.dispatchEvent(new Event('focus'))); await group('samsung'); await act('samsung.update');
+    await current.evaluate(() => window.dispatchEvent(new Event('focus'))); await group('samsung'); await act('samsung.installer');
     await current.waitForFunction(() => __tv.calls.length === 5);
-    check('Update CleanFrame opens TizenBrew Installer on the TV', (await current.evaluate(() => __tv.calls.at(-1))).id === 'xvvl3S1bTI.TizenBrewStandalone');
+    check('The TizenBrew Installer item opens it on the TV', (await current.evaluate(() => __tv.calls.at(-1))).id === 'xvvl3S1bTI.TizenBrewStandalone');
     await current.evaluate(() => { window.dispatchEvent(new Event('focus')); __tv.launchFailure = true; });
     await scene('home'); await act('home.app.netflix'); await current.waitForFunction(() => ShoreQA.where().view === 'message');
     check('Launch failure is shown', /could not|unavailable|try again/i.test(await current.locator('#stage').innerText()));
@@ -937,6 +937,43 @@ try {
     check('Samsung settings show the auto-return choice', (await current.locator('#stage').innerText()).includes('Return here when an app closes'));
     await act('choice.autoReturn.on');
     check('Turning it on saves', (await stored()).autoReturn === 'on');
+  });
+  await run('Update CleanFrame asks TizenBrew Installer and explains failures', async () => {
+    const fakeInstaller = replies => {
+      window.__wsSent = [];
+      window.WebSocket = function () {
+        const ws = this; ws.readyState = 0;
+        setTimeout(() => { ws.readyState = 1; ws.onopen && ws.onopen(); }, 10);
+        ws.send = data => { window.__wsSent.push(JSON.parse(data)); replies.forEach((r, i) => setTimeout(() => ws.onmessage && ws.onmessage({ data: JSON.stringify(r) }), 30 * (i + 1))); };
+        ws.close = () => {};
+      };
+    };
+    const updateText = () => current.locator('#stage').innerText();
+    await page(); await current.evaluate(fakeInstaller, [{ type: 4, payload: 'installStatus.fetching' }, { type: 4, payload: 'installStatus.resigning' }, { type: 1, payload: { response: 0, result: 'install completed' } }]);
+    await group('samsung'); await act('samsung.update');
+    await current.waitForFunction(() => /Installed\. Reopen CleanFrame/.test(document.getElementById('stage').innerText));
+    const sent = await current.evaluate(() => window.__wsSent);
+    check('Update asks for the latest GitHub release of this repo', sent.length === 1 && sent[0].type === 1 && sent[0].payload.url === 'NicsunXnus/CleanFrame-QN90D', sent);
+    await closePage();
+    const failures = [
+      [{ type: 3, payload: 'Error fetching GitHub release: GitHub API error: Not Found' }, 'Couldn’t get the release from GitHub', 'public'],
+      [{ type: 3, payload: 'errors.debuggingNotEnabled' }, 'developer connection', '127.0.0.1'],
+      [{ type: 1, payload: { response: 2 } }, 'no Samsung certificate', 'sign in to Samsung'],
+      [{ type: 1, payload: { response: 0, result: 'install failed[118, -12], reason: Author certificate not match' } }, 'certificate doesn’t match', 'Delete CleanFrame']
+    ];
+    for (const [reply, problem, fix] of failures) {
+      await page(); await current.evaluate(fakeInstaller, [reply]);
+      await group('samsung'); await act('samsung.update');
+      await current.waitForFunction(p => document.getElementById('stage').innerText.includes(p), problem);
+      const text = await updateText();
+      check('Failure explains the problem and a fix: ' + problem, text.includes('Update didn’t work') && text.includes(problem) && text.includes(fix), text.slice(0, 400));
+      await closePage();
+    }
+    await page();
+    await current.evaluate(() => { window.WebSocket = function () { const ws = this; setTimeout(() => { ws.onerror && ws.onerror(); ws.onclose && ws.onclose(); }, 5); ws.close = () => {}; }; });
+    await group('samsung'); await act('samsung.update');
+    await current.waitForFunction(() => __tv.calls.some(c => c.id === 'xvvl3S1bTI.InstallerService'), null, { timeout: 6000 });
+    check('If the installer isn’t running, CleanFrame starts its service', true);
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');

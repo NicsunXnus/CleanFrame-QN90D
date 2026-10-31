@@ -36,7 +36,8 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.5';
+  var VERSION = '0.7.6';
+  var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
   var FONTS = {
@@ -452,6 +453,15 @@
   function release() { busy = false; clearTimeout(busyTimer); S.press = null; }
   function message(title, line, note) {
     push({ id: 'message', msg: 'error', content: { title: title, line: line, note: note || '', actions: [['back', 'Back']] }, f: { b: 0 } });
+  }
+  function runUpdate() {
+    var box = { title: 'Update CleanFrame', line: 'Connecting to TizenBrew Installer…', note: 'CleanFrame closes while the new version installs. Reopen it afterwards.', actions: [['back', 'Back']] };
+    push({ id: 'message', msg: 'error', content: box, f: { b: 0 } }); render();
+    FrameDevice.updateFromGitHub(REPO, function (text) { box.line = text; render(); }, function (err) {
+      if (err) { box.title = 'Update didn’t work'; box.line = err.message; box.note = err.detail || ''; }
+      else { box.line = 'Installed. Reopen CleanFrame to use the new version.'; box.note = ''; }
+      render();
+    });
   }
   function perform(title, run) {
     if (busy) return;
@@ -905,7 +915,8 @@
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
       { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' },
-      { action: 'samsung.update', label: 'Update CleanFrame', description: 'Opens TizenBrew Installer on this TV' }
+      { action: 'samsung.update', label: 'Update CleanFrame', description: 'Installs the latest release from GitHub' },
+      { action: 'samsung.installer', label: 'TizenBrew Installer', description: 'Open it to install by hand or from USB' }
     ] }, { id: 'autoReturn', title: 'Return here when an app closes', horizontal: true, items: options('autoReturn', ['on', 'off']),
       reason: 'Works for apps that close (mewatch, Internet, Stremio). Netflix and YouTube stay running, so use Home for those.' }];
   }
@@ -980,7 +991,8 @@
     else if (item.action === 'background.rotation') openAppearance('rotation');
     else if (item.action === 'samsung.home') { FrameDevice.stopWatch(); perform('Samsung Home', FrameDevice.home); }
     else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
-    else if (item.action === 'samsung.update') perform('Update CleanFrame', FrameDevice.installer);
+    else if (item.action === 'samsung.update') runUpdate();
+    else if (item.action === 'samsung.installer') perform('TizenBrew Installer', FrameDevice.installer);
     else if (item.action === 'about.events.clear') { FrameDevice.clearEvents(); render(); }
   }
   V.appearance = {
@@ -1678,6 +1690,12 @@
       setHTML(el.list, html);
     },
     message: function (t, el) {
+      var m = messageContent(t), view = document.getElementById('sheetView'), part;
+      /* Live messages (Update CleanFrame) change their text after the box opens. */
+      [['msg-title', m.title], ['msg-line', m.line], ['msg-note', m.note]].forEach(function (pair) {
+        part = view && view.querySelector('.' + pair[0]);
+        if (part && part.textContent !== (pair[1] || '')) part.textContent = pair[1] || '';
+      });
       setHTML(el.acts, messageContent(t).actions.map(function (a, i) {
         return '<button type="button" tabindex="-1" class="btn' + (i === t.f.b ? ' is-focus' : '') + '" data-z="act" data-i="' + i + '" data-action="message.' + a[0] + '"><span>' + a[1] + '</span></button>';
       }).join(''));
