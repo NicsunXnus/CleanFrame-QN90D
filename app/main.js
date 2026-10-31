@@ -37,9 +37,10 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.8.2';
+  var VERSION = '0.8.3';
   /* Settings > About > Changelog. Newest first; the six latest fit on screen. */
   var CHANGES = [
+    ['0.8.3', 'Clearer app icon. Only the app panel fades in, slowly, once every app has loaded.'],
     ['0.8.2', 'Changelog in About. TizenTube return copes with TizenBrew restarting. Works with the Disney+ button app.'],
     ['0.8.1', 'Live TV tile. TizenTube returns here when it closes. Checks every 0.3 s.'],
     ['0.8.0', 'Internet opened from Samsung Home also returns here.'],
@@ -1994,20 +1995,36 @@
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
   FrameDevice.setAmbient(S.c.autoReturn === 'on');
   FrameDevice.onEvent(function () { var t = top(); if (t.id === 'appearance' && t.group === 'about') render(); });
-  /* Soft entrance: CleanFrame starts behind a dark veil that fades once the Home picture and
-     fonts are ready, and drops the veil again whenever it is hidden, so each return fades in
-     instead of snapping on (and the app list's own loading never shows). */
-  var veil = $('veil');
-  function veilDown() { veil.className = 'veil is-instant'; }
-  function veilUp() {
-    var tries = 0;
+  /* Soft entrance for the app panel: whenever CleanFrame appears, the app panel (dock or list)
+     starts hidden while the background shows at once. It stays hidden until the installed apps
+     are read, the look is ready and every app icon has loaded, then fades in slowly. */
+  var APPS_WAIT_MS = 10000, appsWaitRun = 0;
+  function appsLoaded() {
+    if (!QA.ready() || catalog.loading) return false;
+    if (window.tizen && window.tizen.application && !catalog.loaded && !catalog.error) return false;
+    return Array.prototype.every.call(homeEl.querySelectorAll('#dock img, #phScene img'), function (img) { return !img.getAttribute('src') || img.complete; });
+  }
+  function hideApps() { appsWaitRun++; homeEl.classList.add('apps-wait'); homeEl.classList.add('apps-instant'); }
+  function revealApps() {
+    var run = appsWaitRun, started = Date.now();
     (function wait() {
-      if (QA.ready() || tries++ > 60) window.requestAnimationFrame(function () { veil.className = 'veil is-off'; });
-      else setTimeout(wait, 50);
+      if (run !== appsWaitRun) return;
+      if (appsLoaded() || Date.now() - started > APPS_WAIT_MS) {
+        homeEl.classList.remove('apps-instant');
+        window.requestAnimationFrame(function () { window.requestAnimationFrame(function () { if (run === appsWaitRun) homeEl.classList.remove('apps-wait'); }); });
+      } else setTimeout(wait, 50);
     }());
   }
-  document.addEventListener('visibilitychange', function () { if (document.hidden) veilDown(); else { veilDown(); window.requestAnimationFrame(veilUp); } });
-  veilUp();
+  QA.appsShown = function () { return !homeEl.classList.contains('apps-wait'); };
+  document.addEventListener('visibilitychange', function () {
+    hideApps();
+    if (document.hidden) return;
+    /* Re-read installed apps each time CleanFrame comes back; the panel waits for it. */
+    if (window.tizen && window.tizen.application) refreshCatalog();
+    revealApps();
+  });
+  hideApps();
   /* Always read the installed apps on the TV at start, so apps found by name (mewatch) have their real ID. */
   if (window.tizen && window.tizen.application) refreshCatalog();
+  revealApps();
 })();

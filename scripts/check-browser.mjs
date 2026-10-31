@@ -107,14 +107,15 @@ async function page(options = {}) {
   });
   await current.addInitScript(installHarness, { mock: true, catalog: CATALOG, minuteMs: 60000, seed: baseline(), ...options });
   await current.goto(preview.baseURL + '/home/');
-  await ready();
+  if (options.holdCatalog || options.skipReady) await current.waitForFunction(() => window.ShoreQA && typeof ShoreQA.ready === 'function' && ShoreQA.ready(), null, { timeout: 15000 });
+  else await ready();
   await current.waitForLoadState('networkidle');
   return current;
 }
 const state = () => current.evaluate(() => ShoreQA.state());
 const stored = () => current.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
 const call = (method, ...args) => current.evaluate(([m, a]) => ShoreQA[m](...a), [method, args]);
-const ready = () => current.waitForFunction(() => window.ShoreQA && typeof ShoreQA.ready === 'function' && ShoreQA.ready(), null, { timeout: 15000 });
+const ready = () => current.waitForFunction(() => window.ShoreQA && typeof ShoreQA.ready === 'function' && ShoreQA.ready() && (!ShoreQA.appsShown || (ShoreQA.appsShown() && ['dock', 'phScene'].every(id => Number(getComputedStyle(document.getElementById(id)).opacity) > 0.99))), null, { timeout: 15000 });
 const nav = (...keys) => call('nav', keys);
 async function act(action) { const result = await call('activate', action); if (result === null || result === false) throw Error('Action unavailable: ' + action); return result; }
 async function scene(name) { await call('scene', name); await current.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); }
@@ -1059,22 +1060,32 @@ try {
     await current.waitForFunction(() => document.getElementById('stage').innerText.includes('Couldn’t start TizenBrew Installer'), null, { timeout: 16000 });
     check('If the service still doesn’t answer, it says how to fix it', (await updateText()).includes('press Back to return here'));
   });
-  await run('CleanFrame fades in when it opens and when it comes back', async () => {
-    await page();
-    const veil = () => current.evaluate(() => ({ cls: document.getElementById('veil').className, opacity: Number(getComputedStyle(document.getElementById('veil')).opacity) }));
-    await current.waitForFunction(() => document.getElementById('veil').classList.contains('is-off'));
-    await current.waitForTimeout(700);
-    check('The veil has faded away once Home is ready', (await veil()).opacity < 0.05, await veil());
+  await run('The app panel fades in once every app has loaded', async () => {
+    const look = () => current.evaluate(() => ({ shown: ShoreQA.appsShown(), dock: Number(getComputedStyle(document.getElementById('dock')).opacity), photo: Number(getComputedStyle(document.getElementById('bg')).opacity) }));
+    await page({ holdCatalog: true, skipReady: true });
+    await current.waitForTimeout(600);
+    const waiting = await look();
+    check('While installed apps are still being read, the app panel stays hidden', !waiting.shown && waiting.dock < 0.05, waiting);
+    check('The background shows straight away (only the app panel is covered)', waiting.photo > 0.95, waiting);
+    check('No full-screen veil remains', await current.evaluate(() => !document.getElementById('veil')));
+    await current.evaluate(() => { __tv.holdCatalog = false; __tv.pending.forEach(p => p.ok(__tv.catalog.map(a => ({ ...a })))); __tv.pending = []; });
+    await current.waitForFunction(() => ShoreQA.appsShown(), null, { timeout: 12000 });
+    await current.waitForTimeout(300);
+    const mid = await look();
+    check('Once loaded, the panel fades in slowly rather than snapping', mid.dock > 0.02 && mid.dock < 0.95, mid);
+    await current.waitForTimeout(1300);
+    check('The fade finishes', (await look()).dock > 0.99, await look());
     await current.evaluate(() => __setHidden(true));
-    const hidden = await veil();
-    check('Leaving CleanFrame drops the veil at once', hidden.cls.includes('is-instant') && hidden.opacity > 0.95, hidden);
+    const hidden = await look();
+    check('Leaving CleanFrame hides the panel at once', !hidden.shown && hidden.dock < 0.05, hidden);
+    const before = await current.evaluate(() => __tv.catalogCalls);
     await current.evaluate(() => __setHidden(false));
-    await current.waitForTimeout(80);
-    const mid = await veil();
-    check('Coming back starts dark, then fades', mid.opacity > 0.3, mid);
-    await current.waitForTimeout(800);
-    check('The fade finishes', (await veil()).opacity < 0.05, await veil());
-    check('The veil never blocks the remote or clicks', await current.evaluate(() => getComputedStyle(document.getElementById('veil')).pointerEvents === 'none'));
+    await current.waitForTimeout(60);
+    check('Coming back starts with the panel hidden and re-reads the apps', !(await look()).shown && (await current.evaluate(() => __tv.catalogCalls)) > before);
+    await current.waitForFunction(() => ShoreQA.appsShown(), null, { timeout: 12000 });
+    await current.waitForTimeout(1400);
+    check('Then fades back in', (await look()).dock > 0.99, await look());
+    check('The panel never blocks the remote', (await call('where')).focusCount === 1);
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');

@@ -616,12 +616,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .section-events .setting-forward{display:none}
 .section-events .setting-reason{font-size:24px;line-height:32px}
 
-/* Soft entrance veil: fades out when CleanFrame is ready or comes back on screen */
-.veil{position:absolute;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#0d0d0e;opacity:1;pointer-events:none;transition:opacity 520ms cubic-bezier(.3,0,.2,1)}
-.veil.is-instant{transition:none}
-.veil.is-off{opacity:0}
-.veil-mark{font-size:30px;line-height:40px;letter-spacing:.4px;color:#f2f0e8;opacity:.42}
-@media(prefers-reduced-motion:reduce){.veil{transition-duration:180ms}}
+/* Soft entrance: the app panel waits hidden until every app has loaded, then fades in slowly */
+.dock,.ph-scene{transition:opacity 1200ms cubic-bezier(.3,0,.2,1)}
+.apps-wait .dock,.apps-wait .ph-scene{opacity:0}
+.apps-wait .cue,.apps-wait .dock-action,.apps-wait .app-focus-name{opacity:0!important}
+.apps-instant .dock,.apps-instant .ph-scene{transition:none}
+@media(prefers-reduced-motion:reduce){.dock,.ph-scene{transition-duration:240ms}}
 
 /* Changelog (Settings > About > Changelog): version over a short wrapped line */
 .detail-changes .appearance-rows{top:244px}
