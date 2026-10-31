@@ -603,6 +603,12 @@ try {
           });
         });
         check(name + ' choices fit ' + width + ' without clipping', geometry.length > 0 && geometry.every(g => g.inside && g.fits) && (await call('where')).focusCount === 1, geometry);
+        const clear = await current.evaluate(() => {
+          const hint = document.getElementById('appearanceDesc').getBoundingClientRect();
+          if (!hint.height) return true;
+          return [...document.querySelectorAll('#appearanceRows .setting-section')].every(e => e.getBoundingClientRect().bottom <= hint.top + 1);
+        });
+        check(name + ' content stays above the OK hint at ' + width, clear);
         await current.screenshot({ path: out + 'settings-' + name + '-' + width + '.jpg', quality: 90 });
       }
     }

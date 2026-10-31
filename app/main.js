@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.8';
+  var VERSION = '0.7.9';
   var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
@@ -915,7 +915,7 @@
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
       { action: 'samsung.settings', label: 'TV settings', description: 'Picture, sound and network settings' },
-      { action: 'samsung.update', label: 'Update CleanFrame', description: 'Installs the latest release from GitHub' },
+      { action: 'samsung.update', label: 'Update CleanFrame', description: 'Experimental, likely won’t work. Type the repo instead' },
       { action: 'samsung.installer', label: 'TizenBrew Installer', description: 'Open it to install by hand or from USB' }
     ] }, { id: 'autoReturn', title: 'Return here when an app closes', horizontal: true, items: options('autoReturn', ['on', 'off']),
       reason: 'Works for apps that close (mewatch, Internet, Stremio). Netflix and YouTube stay running, so use Home for those.' }];
