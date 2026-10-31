@@ -616,12 +616,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .section-events .setting-forward{display:none}
 .section-events .setting-reason{font-size:24px;line-height:32px}
 
-/* Soft entrance: the app panel waits hidden until every app has loaded, then fades in slowly */
-.dock,.ph-scene{transition:opacity 1200ms cubic-bezier(.3,0,.2,1)}
-.apps-wait .dock,.apps-wait .ph-scene{opacity:0}
-.apps-wait .cue,.apps-wait .dock-action,.apps-wait .app-focus-name{opacity:0!important}
-.apps-instant .dock,.apps-instant .ph-scene{transition:none}
-@media(prefers-reduced-motion:reduce){.dock,.ph-scene{transition-duration:240ms}}
+/* Calm start. A cold start shows the wallpaper's small preview full screen (no dark flash)
+   until the full picture and fonts are ready, then cross-fades. Every time CleanFrame appears,
+   the app panel carries a translucent "Loading apps" cover that fades once every app has loaded. */
+.veil{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:50;background:#0d0d0e center/cover no-repeat;opacity:1;pointer-events:none;transition:opacity 700ms cubic-bezier(.3,0,.2,1)}
+.veil.is-off{opacity:0}
+.apps-loading{position:absolute;left:0;top:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;justify-content:center;border-radius:48px;background:rgba(16,20,24,.72);color:#f4f2ec;font-size:32px;line-height:40px;font-weight:500;letter-spacing:-.2px;text-shadow:0 1px 3px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity 900ms cubic-bezier(.3,0,.2,1)}
+.ph-list .apps-loading{border-radius:38px}
+.apps-wait .apps-loading{opacity:1}
+.apps-instant .apps-loading{transition:none}
+@media(prefers-reduced-motion:reduce){.veil,.apps-loading{transition-duration:200ms}}
 
 /* Changelog (Settings > About > Changelog): version over a short wrapped line */
 .detail-changes .appearance-rows{top:244px}

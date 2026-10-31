@@ -37,10 +37,11 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.8.3';
+  var VERSION = '0.8.4';
   /* Settings > About > Changelog. Newest first; the six latest fit on screen. */
   var CHANGES = [
-    ['0.8.3', 'Clearer app icon. Only the app panel fades in, slowly, once every app has loaded.'],
+    ['0.8.4', 'Calm start: wallpaper preview at once, "Loading apps" cover on the app panel.'],
+    ['0.8.3', 'Clearer app icon. App panel waits until every app has loaded.'],
     ['0.8.2', 'Changelog in About. TizenTube return copes with TizenBrew restarting. Works with the Disney+ button app.'],
     ['0.8.1', 'Live TV tile. TizenTube returns here when it closes. Checks every 0.3 s.'],
     ['0.8.0', 'Internet opened from Samsung Home also returns here.'],
@@ -1995,10 +1996,18 @@
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
   FrameDevice.setAmbient(S.c.autoReturn === 'on');
   FrameDevice.onEvent(function () { var t = top(); if (t.id === 'appearance' && t.group === 'about') render(); });
-  /* Soft entrance for the app panel: whenever CleanFrame appears, the app panel (dock or list)
-     starts hidden while the background shows at once. It stays hidden until the installed apps
-     are read, the look is ready and every app icon has loaded, then fades in slowly. */
-  var APPS_WAIT_MS = 10000, appsWaitRun = 0;
+  /* Calm start (see style.css): the cold-start preview veil, and the app panel's "Loading apps"
+     cover each time CleanFrame appears, which lifts once installed apps and icons are loaded. */
+  var APPS_WAIT_MS = 10000, appsWaitRun = 0, veil = $('veil');
+  if (S.c.bg === 'photo') veil.style.backgroundImage = 'url("' + WP + S.c.wall + '-thumb.jpg")';
+  else veil.style.backgroundColor = S.c.bg === 'light' ? '#f2efe8' : '#0d0d0d';
+  (function lift() {
+    var started = Date.now();
+    (function wait() {
+      if (QA.ready() || Date.now() - started > 4000) window.requestAnimationFrame(function () { veil.className = 'veil is-off'; });
+      else setTimeout(wait, 40);
+    }());
+  }());
   function appsLoaded() {
     if (!QA.ready() || catalog.loading) return false;
     if (window.tizen && window.tizen.application && !catalog.loaded && !catalog.error) return false;
@@ -2007,12 +2016,11 @@
   function hideApps() { appsWaitRun++; homeEl.classList.add('apps-wait'); homeEl.classList.add('apps-instant'); }
   function revealApps() {
     var run = appsWaitRun, started = Date.now();
+    window.requestAnimationFrame(function () { if (run === appsWaitRun) homeEl.classList.remove('apps-instant'); });
     (function wait() {
       if (run !== appsWaitRun) return;
-      if (appsLoaded() || Date.now() - started > APPS_WAIT_MS) {
-        homeEl.classList.remove('apps-instant');
-        window.requestAnimationFrame(function () { window.requestAnimationFrame(function () { if (run === appsWaitRun) homeEl.classList.remove('apps-wait'); }); });
-      } else setTimeout(wait, 50);
+      if (appsLoaded() || Date.now() - started > APPS_WAIT_MS) homeEl.classList.remove('apps-wait');
+      else setTimeout(wait, 50);
     }());
   }
   QA.appsShown = function () { return !homeEl.classList.contains('apps-wait'); };

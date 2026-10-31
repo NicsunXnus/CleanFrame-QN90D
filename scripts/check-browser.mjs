@@ -115,7 +115,7 @@ async function page(options = {}) {
 const state = () => current.evaluate(() => ShoreQA.state());
 const stored = () => current.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
 const call = (method, ...args) => current.evaluate(([m, a]) => ShoreQA[m](...a), [method, args]);
-const ready = () => current.waitForFunction(() => window.ShoreQA && typeof ShoreQA.ready === 'function' && ShoreQA.ready() && (!ShoreQA.appsShown || (ShoreQA.appsShown() && ['dock', 'phScene'].every(id => Number(getComputedStyle(document.getElementById(id)).opacity) > 0.99))), null, { timeout: 15000 });
+const ready = () => current.waitForFunction(() => window.ShoreQA && typeof ShoreQA.ready === 'function' && ShoreQA.ready() && (!ShoreQA.appsShown || (ShoreQA.appsShown() && [...document.querySelectorAll('.apps-loading, #veil')].every(e => Number(getComputedStyle(e).opacity) < 0.01))), null, { timeout: 15000 });
 const nav = (...keys) => call('nav', keys);
 async function act(action) { const result = await call('activate', action); if (result === null || result === false) throw Error('Action unavailable: ' + action); return result; }
 async function scene(name) { await call('scene', name); await current.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); }
@@ -619,7 +619,8 @@ try {
   await run('Wallpaper failure, preview cancellation and lazy loading', async () => {
     await page();
     const resources = await current.evaluate(() => performance.getEntriesByType('resource').map(r => r.name));
-    check('No wallpaper thumbnails loaded at startup', !resources.some(u => /-thumb\./.test(u)), resources.filter(u => /thumb/.test(u)));
+    const wall = (await state()).committed.wall;
+    check('Startup loads only the current wallpaper preview (for the start veil)', resources.filter(u => /-thumb\./.test(u)).every(u => u.includes('/' + wall + '-thumb.')), resources.filter(u => /thumb/.test(u)));
     await wallpaper();
     const original = (await stored()).wallpaper;
     await nav('down'); await wallpaperSettled(walls[1].id);
@@ -1060,32 +1061,33 @@ try {
     await current.waitForFunction(() => document.getElementById('stage').innerText.includes('Couldn’t start TizenBrew Installer'), null, { timeout: 16000 });
     check('If the service still doesn’t answer, it says how to fix it', (await updateText()).includes('press Back to return here'));
   });
-  await run('The app panel fades in once every app has loaded', async () => {
-    const look = () => current.evaluate(() => ({ shown: ShoreQA.appsShown(), dock: Number(getComputedStyle(document.getElementById('dock')).opacity), photo: Number(getComputedStyle(document.getElementById('bg')).opacity) }));
-    await page({ holdCatalog: true, skipReady: true });
-    await current.waitForTimeout(600);
+  await run('Calm start: preview veil, then a loading cover on the app panel', async () => {
+    const look = () => current.evaluate(() => ({ shown: ShoreQA.appsShown(), cover: Number(getComputedStyle(document.querySelector('#dock .apps-loading')).opacity), veil: Number(getComputedStyle(document.getElementById('veil')).opacity), dock: Number(getComputedStyle(document.getElementById('dock')).opacity), text: document.querySelector('#dock .apps-loading').textContent }));
+    await page({ holdCatalog: true });
+    check('Cold start shows the wallpaper preview, not a dark screen', await current.evaluate(() => /-thumb\.jpg/.test(document.getElementById('veil').style.backgroundImage)));
+    await current.waitForTimeout(1000);
     const waiting = await look();
-    check('While installed apps are still being read, the app panel stays hidden', !waiting.shown && waiting.dock < 0.05, waiting);
-    check('The background shows straight away (only the app panel is covered)', waiting.photo > 0.95, waiting);
-    check('No full-screen veil remains', await current.evaluate(() => !document.getElementById('veil')));
+    check('Once the picture is ready the start veil lifts, while apps are still loading', waiting.veil < 0.05, waiting);
+    await current.screenshot({ path: out + 'loading-cover.jpg', quality: 85 });
+    check('The app panel stays in place under a translucent "Loading apps" cover', !waiting.shown && waiting.cover > 0.95 && waiting.dock > 0.99 && waiting.text.includes('Loading apps'), waiting);
     await current.evaluate(() => { __tv.holdCatalog = false; __tv.pending.forEach(p => p.ok(__tv.catalog.map(a => ({ ...a })))); __tv.pending = []; });
     await current.waitForFunction(() => ShoreQA.appsShown(), null, { timeout: 12000 });
-    await current.waitForTimeout(300);
+    await current.waitForTimeout(250);
     const mid = await look();
-    check('Once loaded, the panel fades in slowly rather than snapping', mid.dock > 0.02 && mid.dock < 0.95, mid);
-    await current.waitForTimeout(1300);
-    check('The fade finishes', (await look()).dock > 0.99, await look());
+    check('Once loaded, the cover fades out gently', mid.cover > 0.05 && mid.cover < 0.95, mid);
+    await current.waitForTimeout(1000);
+    check('The cover is gone', (await look()).cover < 0.01, await look());
     await current.evaluate(() => __setHidden(true));
     const hidden = await look();
-    check('Leaving CleanFrame hides the panel at once', !hidden.shown && hidden.dock < 0.05, hidden);
+    check('Leaving CleanFrame puts the cover back at once (background untouched)', hidden.cover > 0.95 && hidden.veil < 0.05 && hidden.dock > 0.99, hidden);
     const before = await current.evaluate(() => __tv.catalogCalls);
     await current.evaluate(() => __setHidden(false));
     await current.waitForTimeout(60);
-    check('Coming back starts with the panel hidden and re-reads the apps', !(await look()).shown && (await current.evaluate(() => __tv.catalogCalls)) > before);
+    check('Coming back shows the cover and re-reads the apps', (await look()).cover > 0.8 && (await current.evaluate(() => __tv.catalogCalls)) > before, await look());
     await current.waitForFunction(() => ShoreQA.appsShown(), null, { timeout: 12000 });
-    await current.waitForTimeout(1400);
-    check('Then fades back in', (await look()).dock > 0.99, await look());
-    check('The panel never blocks the remote', (await call('where')).focusCount === 1);
+    await current.waitForTimeout(1200);
+    check('Then the cover fades away', (await look()).cover < 0.01, await look());
+    check('Neither layer blocks the remote', (await call('where')).focusCount === 1 && await current.evaluate(() => [...document.querySelectorAll('.apps-loading, #veil')].every(e => getComputedStyle(e).pointerEvents === 'none')));
   });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');
