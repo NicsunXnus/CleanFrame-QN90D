@@ -300,8 +300,8 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .f-type .sheet .sc.is-lifted .panel-content,.f-type .sheet .er.is-lifted .panel-content{transform:none}
 
 /* Settings overview: each group carries one short, committed summary. */
-.settings-overview{position:absolute;left:112px;top:212px;width:1056px}
-.settings-group{width:100%;height:112px;padding:12px 32px 12px 28px;border-radius:20px;display:flex;align-items:center;justify-content:space-between;gap:32px;color:var(--ink);transition:background-color 140ms linear,color 140ms linear}
+.settings-overview{position:absolute;left:112px;top:192px;width:1056px}
+.settings-group{width:100%;height:100px;padding:8px 32px 8px 28px;border-radius:20px;display:flex;align-items:center;justify-content:space-between;gap:32px;color:var(--ink);transition:background-color 140ms linear,color 140ms linear}
 .settings-group+.settings-group{margin-top:8px}
 .settings-group-copy{min-width:0;display:flex;flex-direction:column;gap:4px}
 .settings-group-name{font-size:40px;line-height:48px;font-weight:500;letter-spacing:-.6px}

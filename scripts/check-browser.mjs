@@ -974,6 +974,9 @@ try {
     await group('samsung'); await act('samsung.update');
     await current.waitForFunction(() => __tv.calls.some(c => c.id === 'xvvl3S1bTI.InstallerService'), null, { timeout: 6000 });
     check('If the installer isn’t running, CleanFrame starts its service', true);
+    check('It never opens the installer app on top of CleanFrame', !(await current.evaluate(() => __tv.calls.some(c => c.id === 'xvvl3S1bTI.TizenBrewStandalone'))));
+    await current.waitForFunction(() => document.getElementById('stage').innerText.includes('Couldn’t start TizenBrew Installer'), null, { timeout: 16000 });
+    check('If the service still doesn’t answer, it says how to fix it', (await updateText()).includes('press Back to return here'));
   });
   await run('CleanFrame fades in when it opens and when it comes back', async () => {
     await page();

@@ -130,11 +130,11 @@
     } catch (err) { note('App events refused: ' + (err && (err.name + ' ' + err.message))); }
     document.addEventListener('visibilitychange', function () { note(document.hidden ? 'CleanFrame hidden' : 'CleanFrame shown'); });
   }());
-  /* Auto-return: the TV sends no event when an app closes, so ask it every second whether
+  /* Auto-return: the TV sends no event when an app closes, so ask it twice a second whether
      the app CleanFrame opened is still running. Once it has gone, call back. Apps that stay
      running in the background (Netflix) never trigger it. Watching ends when CleanFrame is
      shown again or another app is opened from it. */
-  var watch = null, POLL = 1000, NEVER_SEEN = 30000;
+  var watch = null, POLL = 500, NEVER_SEEN = 30000, GIVE_UP = 4 * 60 * 60 * 1000;
   function stopWatch(reason) {
     if (!watch) return;
     clearInterval(watch.timer);
@@ -153,7 +153,7 @@
         a.getAppsContext(function (list) {
           if (watch !== w) return;
           var running = list.some(function (c) { return c.appId === id; });
-          if (running) { w.seen = true; return; }
+          if (running) { w.seen = true; if (Date.now() - w.started > GIVE_UP) stopWatch('Stopped watching ' + name + ' after 4 hours'); return; }
           if (!w.seen) { if (Date.now() - w.started > NEVER_SEEN) stopWatch('Stopped watching ' + name + ' (never saw it run)'); return; }
           stopWatch(name + ' closed, returning');
           onClosed();
@@ -207,21 +207,23 @@
     function startInstaller() {
       var a = api();
       if (!a) return;
-      try { a.launch(INSTALLER_SERVICE, function () {}, function () {
-        try { a.launch(INSTALLER_APP, function () {}, function (err) {
-          if (err && err.name === 'NotFoundError') finish({ message: 'TizenBrew Installer isn’t on this TV.',
-            detail: 'Install it once from your PC (Install TizenBrew Installer), or update CleanFrame from a USB stick.' });
-        }); } catch (e) {}
+      /* Start only the installer's background service; opening the installer app would hide
+         CleanFrame and leave the request stranded. */
+      try { a.launch(INSTALLER_SERVICE, function () {}, function (err) {
+        if (err && err.name === 'NotFoundError') finish({ message: 'TizenBrew Installer isn’t on this TV.',
+          detail: 'Install it once from your PC (Install TizenBrew Installer), or update CleanFrame from a USB stick.' });
       }); } catch (e) {}
     }
     connect();
     timer = setInterval(function () {
       if (finished) return;
       if (!socket && attempts === 1) { onStatus('Starting TizenBrew Installer…'); startInstaller(); }
-      if (!socket && Date.now() - started < 25000) { connect(); return; }
+      if (!socket && Date.now() - started < 12000) { connect(); return; }
       if (socket && socket.readyState === 1 && sentAt && !resent && Date.now() - sentAt > 6000) { resent = true; send(); return; }
-      if (Date.now() - started > (sentAt ? 180000 : 25000)) finish({ message: 'TizenBrew Installer didn’t answer.',
-        detail: 'Open TizenBrew Installer once so its service starts, check Host PC IP is 127.0.0.1, then try again. Or use Install from GitHub there.' });
+      if (!sentAt && Date.now() - started > 12000) finish({ message: 'Couldn’t start TizenBrew Installer in the background.',
+        detail: 'Open TizenBrew Installer from Apps, press Back to return here, then choose Update CleanFrame again. If that fails, use Install from GitHub in the installer.' });
+      if (sentAt && Date.now() - started > 180000) finish({ message: 'TizenBrew Installer stopped answering.',
+        detail: 'Check Host PC IP is 127.0.0.1 and the repo is public, then try again. Or use Install from GitHub in the installer.' });
     }, 1500);
   }
   function eventLog() { return events.slice(); }
