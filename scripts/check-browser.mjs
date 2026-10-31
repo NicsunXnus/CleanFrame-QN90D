@@ -587,9 +587,10 @@ try {
     for (const width of [1920, 1280]) {
       await current.setViewportSize({ width, height: width * 9 / 16 });
       await current.waitForFunction(w => Math.abs(document.getElementById('stage').getBoundingClientRect().width - w) < 1, width);
-      for (const name of ['background', 'layout', 'typography', 'focus', 'samsung', 'rotation']) {
-        await group(name === 'rotation' ? 'background' : name);
+      for (const name of ['background', 'layout', 'typography', 'focus', 'samsung', 'rotation', 'about', 'changes']) {
+        await group(name === 'rotation' ? 'background' : name === 'changes' ? 'about' : name);
         if (name === 'rotation') await act('background.rotation');
+        if (name === 'changes') await act('about.changes');
         const geometry = await current.evaluate(() => {
           const stage = document.getElementById('stage').getBoundingClientRect();
           const actions = ShoreQA.actions();
@@ -931,8 +932,27 @@ try {
     check('TizenTube is watched through the TizenBrew app', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('Watching TizenTube'));
     check('Nothing happens while TizenTube is open', !(await returned()));
     await current.evaluate(() => { __tv.running = ['xvvl3S1bvH.StandaloneService']; });
+    await current.waitForTimeout(800);
+    check('TizenBrew restarting itself right after launch does not count as closing', !(await returned()));
+    await current.evaluate(b => { __tv.running = [b]; }, BREW);
+    await current.waitForTimeout(6000);
+    await current.evaluate(() => { __tv.running = ['xvvl3S1bvH.StandaloneService']; });
     await current.waitForFunction(id => __tv.calls.some(c => c.id === id), SELF, { timeout: 5000 });
     check('Closing TizenTube returns to CleanFrame (service left running is ignored)', await returned());
+    await closePage();
+  });
+  await run('Changelog and the Disney+ button app', async () => {
+    await page();
+    await group('about'); await act('about.changes');
+    const text = await current.locator('#stage').innerText();
+    check('About opens a changelog with the current version first', text.includes('Changelog') && text.indexOf('0.8.2') >= 0 && text.indexOf('0.8.2') < text.indexOf('0.8.1'), text.slice(0, 300));
+    await nav('back');
+    check('Back from the changelog returns to About', (await current.locator('#stage').innerText()).includes('version on Home'));
+    await closePage();
+    await page({ catalog: CATALOG.map(a => a.id === 'MCmYXNxgcu.DisneyPlus' ? { ...a, name: 'CleanFrame Button' } : a) });
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    const listed = await current.evaluate(() => new Promise(r => FrameDevice.apps((e, l) => r((l || []).map(a => a.appId)))));
+    check('The Disney+ button app is never listed as Disney+', listed.length > 0 && !listed.includes('MCmYXNxgcu.DisneyPlus'), listed);
     await closePage();
   });
   await run('Returns when Internet opened elsewhere closes', async () => {

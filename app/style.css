@@ -622,3 +622,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .veil.is-off{opacity:0}
 .veil-mark{font-size:30px;line-height:40px;letter-spacing:.4px;color:#f2f0e8;opacity:.42}
 @media(prefers-reduced-motion:reduce){.veil{transition-duration:180ms}}
+
+/* Changelog (Settings > About > Changelog): version over a short wrapped line */
+.detail-changes .appearance-rows{top:244px}
+.section-changes .setting-options{gap:2px}
+.section-changes .setting-choice.has-description{min-height:0;padding:6px 24px;font-size:26px;line-height:32px;letter-spacing:0;border-radius:12px}
+.section-changes .setting-description{font-size:22px;line-height:28px}
+.section-changes .setting-forward{display:none}
+.section-changes .setting-name{white-space:normal}

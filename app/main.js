@@ -37,7 +37,20 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.8.1';
+  var VERSION = '0.8.2';
+  /* Settings > About > Changelog. Newest first; the six latest fit on screen. */
+  var CHANGES = [
+    ['0.8.2', 'Changelog in About. TizenTube return copes with TizenBrew restarting. Works with the Disney+ button app.'],
+    ['0.8.1', 'Live TV tile. TizenTube returns here when it closes. Checks every 0.3 s.'],
+    ['0.8.0', 'Internet opened from Samsung Home also returns here.'],
+    ['0.7.9', 'Update CleanFrame marked experimental. Samsung settings fit the screen.'],
+    ['0.7.8', 'Settings fit above the OK hint. Checks every 0.5 s.'],
+    ['0.7.7', 'Soft fade-in whenever CleanFrame appears.'],
+    ['0.7.6', 'Update CleanFrame from Settings, with fixes for each error.'],
+    ['0.7.5', 'Return here when an app opened from CleanFrame closes.'],
+    ['0.7.3', 'mewatch opens on the first try after a restart.'],
+    ['0.7.2', 'Version in About, optionally on Home.']
+  ];
   var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
@@ -554,7 +567,7 @@
   function openSettings() { push({ id: 'settings', f: { id: S.settingsFocus } }); }
   function openAppearance(group) {
     var axis = { background: 'bg', layout: 'layout', typography: 'font', focus: 'focus', about: 'versionTag' }[group];
-    var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : 'samsung.home');
+    var action = S.detailFocus[group] || (axis ? 'choice.' + axis + '.' + S.c[axis] : group === 'rotation' ? 'rotation.' + S.c.mode : group === 'changes' ? 'changes.0' : 'samsung.home');
     push({ id: 'appearance', group: group, f: { action: action } });
   }
   function openMessage(key) { push({ id: 'message', msg: key, f: { b: 0 } }); }
@@ -890,7 +903,8 @@
     if (id === 'editor') openEditor('settings');
     else openAppearance(id);
   }
-  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung', about: 'About' };
+  var DETAIL_NAMES = { background: 'Background', layout: 'Layout', typography: 'Typography', focus: 'Focus', rotation: 'Rotation', samsung: 'Samsung', about: 'About', changes: 'Changelog' };
+  var PARENT = { rotation: 'Background', changes: 'About' };
   function choice(axis, value, disabled) {
     return { action: axis === 'mode' ? 'rotation.' + value : 'choice.' + axis + '.' + value, axis: axis, value: value, disabled: !!disabled,
       label: axis === 'font' ? FONTS[value].name : axis === 'mode' ? MODES.filter(function (m) { return m.id === value; })[0].name : value === 'both' ? 'Both' : VALUE_NAMES[value] };
@@ -916,9 +930,11 @@
     ];
     if (t.group === 'rotation') return [{ id: 'mode', title: '', items: options('mode', MODES.map(function (m) { return m.id; }), flat),
       reason: flat ? 'Choose Photo in Background to use rotation.' : 'Timed changes pause while Settings or another panel is open.' }];
+    if (t.group === 'changes') return [{ id: 'changes', title: '', items: CHANGES.slice(0, 6).map(function (c, i) { return { action: 'changes.' + i, label: c[0], description: c[1] }; }) }];
     if (t.group === 'about') return [{ id: 'versionTag', title: 'CleanFrame ' + VERSION + ' \u00b7 version on Home', horizontal: true, items: options('versionTag', ['hide', 'show']) },
+      { id: 'changelog', title: '', items: [{ action: 'about.changes', label: 'Changelog' }] },
       { id: 'events', title: 'App events (test, newest first)', items: [{ action: 'about.events.clear', label: 'Clear events' }].concat(
-        FrameDevice.eventLog().slice(-8).reverse().map(function (line, i) { return { action: 'about.event.' + i, label: eventLabel(line) }; })),
+        FrameDevice.eventLog().slice(-6).reverse().map(function (line, i) { return { action: 'about.event.' + i, label: eventLabel(line) }; })),
         reason: FrameDevice.eventLog().length ? '' : 'No events yet. Open an app from CleanFrame, leave it, then come back here.' }];
     return [{ id: 'samsung', title: '', items: [
       { action: 'samsung.home', label: 'Samsung Home', description: 'Open Samsung’s Home screen' },
@@ -937,7 +953,7 @@
     });
   }
   function detailRows(t) {
-    var rows = [[{ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }]];
+    var rows = [[{ action: 'settings.back', label: PARENT[t.group] || 'Settings' }]];
     detailSections(t).forEach(function (section) {
       var enabled = section.items.filter(function (item) { return !item.disabled; });
       if (section.horizontal && enabled.length) rows.push(enabled);
@@ -1002,6 +1018,7 @@
     else if (item.action === 'samsung.settings') perform('TV settings', FrameDevice.settings);
     else if (item.action === 'samsung.update') runUpdate();
     else if (item.action === 'samsung.installer') perform('TizenBrew Installer', FrameDevice.installer);
+    else if (item.action === 'about.changes') openAppearance('changes');
     else if (item.action === 'about.events.clear') { FrameDevice.clearEvents(); render(); }
   }
   V.appearance = {
@@ -1483,7 +1500,7 @@
         + ' data-z="detail" data-i="0" data-id="' + item.action + '" data-action="' + item.action + '">' + inner
         + (item.axis ? '<span class="setting-tick" aria-hidden="true">' + (applied ? icon('check') : '') + '</span>' : '') + '</button>';
     }
-    setHTML(appearanceBack, command({ action: 'settings.back', label: t.group === 'rotation' ? 'Background' : 'Settings' }, icon('left') + '<span>' + (t.group === 'rotation' ? 'Background' : 'Settings') + '</span>', 'setting-back'));
+    setHTML(appearanceBack, command({ action: 'settings.back', label: PARENT[t.group] || 'Settings' }, icon('left') + '<span>' + (PARENT[t.group] || 'Settings') + '</span>', 'setting-back'));
     setHTML(appearanceRows, detailSections(t).map(function (section) {
       return '<section class="setting-section' + (section.horizontal ? ' is-horizontal' : '') + ' section-' + section.id + '">'
         + (section.title ? '<h3 class="setting-label" id="setting-' + section.id + '">' + section.title + '</h3>' : '')
@@ -1506,7 +1523,7 @@
         + command({ action: 'settings.retry', label: 'Try again' }, '<span>Try again</span>', 'setting-retry');
     }
     setHTML(appearanceStatus, status);
-    hint = selected.disabled ? '' : selected.action === 'settings.back' ? 'Return to ' + (t.group === 'rotation' ? 'Background' : 'Settings') : selected.action === 'settings.retry' ? 'Retry this change' : selected.axis ? 'Apply selected setting' : selected.action === 'background.wallpaper' ? 'Choose a wallpaper' : selected.action === 'background.rotation' ? 'Choose a rotation interval' : 'Open on the TV';
+    hint = selected.disabled ? '' : selected.action === 'settings.back' ? 'Return to ' + (PARENT[t.group] || 'Settings') : selected.action === 'settings.retry' ? 'Retry this change' : selected.axis ? 'Apply selected setting' : selected.action === 'background.wallpaper' ? 'Choose a wallpaper' : selected.action === 'background.rotation' ? 'Choose a rotation interval' : selected.action === 'about.changes' ? 'See what changed in each version' : /^(changes|about\.event)\./.test(selected.action) ? '' : 'Open on the TV';
     setHTML(appearanceDesc, hint ? '<span class="remote-key">OK</span><span>' + esc(hint) + '</span>' : '');
   }
   function renderWallpaper(t) {

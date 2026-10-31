@@ -102,6 +102,8 @@
           Object.keys(ID_MATCH).forEach(function (brand) { if (!known[a.id] && ID_MATCH[brand].test(a.id) && !/plus/i.test(a.id + ' ' + a.name)) known[a.id] = brand; });
           var primary = !!known[a.id], stream = STREAMING.indexOf(a.id) >= 0;
           var consumer = /^[A-Za-z0-9]{10}\.[A-Za-z0-9_-]+$/.test(a.id) || CONSUMER_SYSTEM.indexOf(a.id) >= 0;
+          /* The Disney+ remote-button app (CleanFrame Button) borrows Disney+'s ID; never list it. */
+          if (a.id === IDS.disneyplus && /cleanframe/i.test(a.name || '')) return;
           if (a.id === SELF || INTERNAL.indexOf(a.id) >= 0 || seen[a.id] || !a.name || (!primary && !stream && (!a.show || !consumer))) return;
           if (!primary && /(?:service|worker|preview|promotion|plugin|launcher|test|sdk|^ep[ -]|factory|daemon)/i.test(a.name + ' ' + a.id)) return;
           if (/-dummy$/.test(a.id) || (a.id === 'com.samsung.tv.cobalt-yt' && youtubeApp)) return;
@@ -142,7 +144,9 @@
      the app CleanFrame opened is still running. Once it has gone, call back. Apps that stay
      running in the background (Netflix) never trigger it. Watching ends when CleanFrame is
      shown again or another app is opened from it. */
-  var watch = null, POLL = 300, NEVER_SEEN = 30000, GIVE_UP = 4 * 60 * 60 * 1000;
+  /* RESTART: TizenBrew closes and reopens itself when CleanFrame opens a module, so a close in the
+     first few seconds is that restart, not the person leaving. */
+  var BREW_APP = 'xvvl3S1bvH.TizenBrewStandalone', watch = null, POLL = 300, NEVER_SEEN = 30000, RESTART = 6000, GIVE_UP = 4 * 60 * 60 * 1000;
   function stopWatch(reason) {
     if (!watch) return;
     clearInterval(watch.timer);
@@ -162,6 +166,7 @@
           if (watch !== w) return;
           var running = list.some(function (c) { return c.appId === id; });
           if (running) { w.seen = true; if (Date.now() - w.started > GIVE_UP) stopWatch('Stopped watching ' + name + ' after 4 hours'); return; }
+          if (id === BREW_APP && w.seen && Date.now() - w.started < RESTART) { w.seen = false; return; }
           if (!w.seen) { if (Date.now() - w.started > NEVER_SEEN) stopWatch('Stopped watching ' + name + ' (never saw it run)'); return; }
           stopWatch(name + ' closed, returning');
           onClosed();
