@@ -130,11 +130,11 @@
     } catch (err) { note('App events refused: ' + (err && (err.name + ' ' + err.message))); }
     document.addEventListener('visibilitychange', function () { note(document.hidden ? 'CleanFrame hidden' : 'CleanFrame shown'); });
   }());
-  /* Auto-return: the TV sends no event when an app closes, so ask it every few seconds whether
+  /* Auto-return: the TV sends no event when an app closes, so ask it every second whether
      the app CleanFrame opened is still running. Once it has gone, call back. Apps that stay
      running in the background (Netflix) never trigger it. Watching ends when CleanFrame is
      shown again or another app is opened from it. */
-  var watch = null, POLL = 2500, NEVER_SEEN = 30000;
+  var watch = null, POLL = 1000, NEVER_SEEN = 30000;
   function stopWatch(reason) {
     if (!watch) return;
     clearInterval(watch.timer);

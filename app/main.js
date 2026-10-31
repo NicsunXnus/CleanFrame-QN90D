@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.6';
+  var VERSION = '0.7.7';
   var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
@@ -1967,6 +1967,20 @@
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
   FrameDevice.onEvent(function () { var t = top(); if (t.id === 'appearance' && t.group === 'about') render(); });
+  /* Soft entrance: CleanFrame starts behind a dark veil that fades once the Home picture and
+     fonts are ready, and drops the veil again whenever it is hidden, so each return fades in
+     instead of snapping on (and the app list's own loading never shows). */
+  var veil = $('veil');
+  function veilDown() { veil.className = 'veil is-instant'; }
+  function veilUp() {
+    var tries = 0;
+    (function wait() {
+      if (QA.ready() || tries++ > 60) window.requestAnimationFrame(function () { veil.className = 'veil is-off'; });
+      else setTimeout(wait, 50);
+    }());
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) veilDown(); else { veilDown(); window.requestAnimationFrame(veilUp); } });
+  veilUp();
   /* Always read the installed apps on the TV at start, so apps found by name (mewatch) have their real ID. */
   if (window.tizen && window.tizen.application) refreshCatalog();
 })();

@@ -975,6 +975,23 @@ try {
     await current.waitForFunction(() => __tv.calls.some(c => c.id === 'xvvl3S1bTI.InstallerService'), null, { timeout: 6000 });
     check('If the installer isn’t running, CleanFrame starts its service', true);
   });
+  await run('CleanFrame fades in when it opens and when it comes back', async () => {
+    await page();
+    const veil = () => current.evaluate(() => ({ cls: document.getElementById('veil').className, opacity: Number(getComputedStyle(document.getElementById('veil')).opacity) }));
+    await current.waitForFunction(() => document.getElementById('veil').classList.contains('is-off'));
+    await current.waitForTimeout(700);
+    check('The veil has faded away once Home is ready', (await veil()).opacity < 0.05, await veil());
+    await current.evaluate(() => __setHidden(true));
+    const hidden = await veil();
+    check('Leaving CleanFrame drops the veil at once', hidden.cls.includes('is-instant') && hidden.opacity > 0.95, hidden);
+    await current.evaluate(() => __setHidden(false));
+    await current.waitForTimeout(80);
+    const mid = await veil();
+    check('Coming back starts dark, then fades', mid.opacity > 0.3, mid);
+    await current.waitForTimeout(800);
+    check('The fade finishes', (await veil()).opacity < 0.05, await veil());
+    check('The veil never blocks the remote or clicks', await current.evaluate(() => getComputedStyle(document.getElementById('veil')).pointerEvents === 'none'));
+  });
   await run('Physical-key repeats and Back hierarchy', async () => {
     await page(); await editor(); await remove('netflix');
     await current.keyboard.down('Enter'); await current.keyboard.down('Enter');
