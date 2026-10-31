@@ -43,7 +43,7 @@ async function run(name, fn) {
 async function closePage() { if (current) { current.__closing = true; await current.close(); current = null; } }
 
 // Production still calls its unmodified device.js adapter.
-function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure, noFontAPI, storageFailure }) {
+function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure, noFontAPI, storageFailure, holdCatalog }) {
   if (!sessionStorage.getItem('__cleanframe_seeded')) {
     if (seed !== undefined) localStorage.setItem('cleanframe.home.v1', typeof seed === 'string' ? seed : JSON.stringify(seed));
     if (legacy !== undefined) localStorage.setItem('cleanframe.shore.v1', typeof legacy === 'string' ? legacy : JSON.stringify(legacy));
@@ -65,7 +65,7 @@ function installHarness({ seed, legacy, mock, catalog, minuteMs, catalogFailure,
   };
   if (noFontAPI) Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   if (!mock) return;
-  window.__tv = { catalog, catalogFailure: !!catalogFailure, launchFailure: false, holdCatalog: false, pending: [], calls: [], catalogCalls: 0 };
+  window.__tv = { catalog, catalogFailure: !!catalogFailure, launchFailure: false, holdCatalog: !!holdCatalog, pending: [], calls: [], catalogCalls: 0 };
   window.tizen = {
     ApplicationControlData: function (key, value) { this.key = key; this.value = value; },
     ApplicationControl: function (operation, uri, mime, category, data) { Object.assign(this, { operation, uri, mime, category, data }); },
@@ -839,7 +839,20 @@ try {
     check('Cobalt YouTube launches its own ID', (await current.evaluate(() => __tv.calls.at(-1))).id === 'com.samsung.tv.cobalt-yt');
     await closePage();
     await page({ seed: baseline({ dock: ['netflix', 'appletv'], lastApp: 'netflix' }), catalog: CATALOG });
-    check('Saved Home is never pruned', same((await state()).dock, ['netflix', 'appletv']) && (await current.evaluate(() => __tv.catalogCalls)) === 0);
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    check('Saved Home is never pruned, even after the start-up app scan', same((await state()).dock, ['netflix', 'appletv']) && (await current.evaluate(() => __tv.catalogCalls)) === 1);
+    await closePage();
+    await page({ seed: baseline({ dock: ['mewatch', 'netflix'], lastApp: 'mewatch' }), catalog: tv });
+    await current.waitForFunction(() => ShoreQA.state().catalog.loaded);
+    await act('home.app.mewatch'); await current.waitForFunction(() => __tv.calls.length === 1);
+    check('mewatch opens on the first try after a restart', (await current.evaluate(() => __tv.calls.at(-1))).id === MEWATCH);
+    await closePage();
+    await page({ seed: baseline({ dock: ['mewatch', 'netflix'], lastApp: 'mewatch' }), catalog: tv, holdCatalog: true });
+    await act('home.app.mewatch');
+    check('mewatch pressed before the scan finishes waits instead of erroring', (await current.evaluate(() => ShoreQA.where().view)) !== 'message' && (await current.evaluate(() => __tv.calls.length)) === 0);
+    await current.evaluate(() => { __tv.holdCatalog = false; __tv.pending.forEach(p => p.ok(__tv.catalog.map(a => ({ ...a })))); __tv.pending = []; });
+    await current.waitForFunction(() => __tv.calls.length === 1);
+    check('mewatch then opens once the scan finishes', (await current.evaluate(() => __tv.calls.at(-1))).id === MEWATCH);
   });
   await run('Apps open with CleanFrame as their caller', async () => {
     await page();

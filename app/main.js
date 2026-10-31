@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.2';
+  var VERSION = '0.7.3';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
   var FONTS = {
@@ -466,6 +466,7 @@
     if (!a || busy) return;
     if (S.c.home.indexOf(id) >= 0) { c = next(S.c.home.slice(), S.c.recent.slice()); c.lastApp = id; write(c, 'Last app'); }
     S.press = id; S.lastLaunch = a.name;
+    if (!a.appId && !catalog.loaded) { launchAfterCatalog = id; refreshCatalog(); return; }
     perform(a.name, function (done) {
       if (!a.appId) done({ message: a.name + ' isn\u2019t installed on this TV.', detail: 'Install it from the Samsung app store, then open All apps once.' });
       else if (a.module) FrameDevice.launchModule(a.appId, a.module, done);
@@ -473,7 +474,7 @@
     });
   }
   /* First run on the TV: drop default shortcuts for apps this TV doesn't have. */
-  var pruneDefault = false;
+  var pruneDefault = false, launchAfterCatalog = null;
   function matchHomeToTV() {
     var keep, c;
     pruneDefault = false;
@@ -510,6 +511,7 @@
       if (top().id === 'apps' && oldFocus && ALPHA.indexOf(oldFocus) >= 0) top().f.i = ALPHA.indexOf(oldFocus);
       if (pruneDefault) matchHomeToTV();
       norm(); render();
+      if (launchAfterCatalog) { var waiting = launchAfterCatalog; launchAfterCatalog = null; launch(waiting); }
     });
   }
 
@@ -1917,5 +1919,6 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
-  if (pruneDefault) refreshCatalog();
+  /* Always read the installed apps on the TV at start, so apps found by name (mewatch) have their real ID. */
+  if (window.tizen && window.tizen.application) refreshCatalog();
 })();
