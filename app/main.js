@@ -918,7 +918,7 @@
       { action: 'samsung.update', label: 'Update CleanFrame', description: 'Experimental, likely won’t work. Type the repo instead' },
       { action: 'samsung.installer', label: 'TizenBrew Installer', description: 'Open it to install by hand or from USB' }
     ] }, { id: 'autoReturn', title: 'Return here when an app closes', horizontal: true, items: options('autoReturn', ['on', 'off']),
-      reason: 'Works for apps that close, and for Internet however you open it while CleanFrame is in the background. Netflix and YouTube stay running.' }];
+      reason: 'Also covers Internet opened from Samsung Home. Netflix and YouTube stay running.' }];
   }
   /* Event lines name the app where CleanFrame knows it; unknown IDs stay as they are. */
   var EVENT_NAMES = { 'com.samsung.tv.csfs': 'Samsung Home', 'GzIyAIxWae.CleanFrame': 'CleanFrame', 'xvvl3S1bvH.TizenBrewStandalone': 'TizenBrew' };
