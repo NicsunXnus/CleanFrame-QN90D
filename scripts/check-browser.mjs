@@ -910,6 +910,36 @@ try {
     await current.evaluate(() => __tv.statusCb('com.samsung.tv.csfs', true));
     check('A new event shows up while About is open', (await current.locator('#stage').innerText()).includes('ACTIVE Samsung Home'));
   });
+  await run('Returns when Internet opened elsewhere closes', async () => {
+    const SELF = 'GzIyAIxWae.CleanFrame', returned = () => current.evaluate(id => __tv.calls.some(c => c.id === id), SELF);
+    await page();
+    await current.evaluate(() => { __tv.running = ['com.samsung.tv.csfs']; __setHidden(true); });
+    await current.waitForTimeout(1200);
+    await current.evaluate(() => { __tv.running = ['com.samsung.tv.csfs', 'org.tizen.browser']; });
+    await current.waitForTimeout(1500);
+    check('Nothing happens while Internet is open', !(await returned()));
+    await current.evaluate(() => { __tv.running = ['com.samsung.tv.csfs']; });
+    await current.waitForFunction(id => __tv.calls.some(c => c.id === id), SELF, { timeout: 5000 });
+    check('Internet opened from Smart Hub returns to CleanFrame when it closes', await returned());
+    await closePage();
+    await page();
+    await current.evaluate(() => { __tv.running = ['org.tizen.browser']; __setHidden(true); });
+    await current.waitForTimeout(1200);
+    await current.evaluate(() => { __tv.running = ['org.tizen.browser', 'EHQoULJE2m.toggleSg']; });
+    await current.waitForTimeout(1200);
+    await current.evaluate(() => { __tv.running = ['EHQoULJE2m.toggleSg']; });
+    await current.waitForTimeout(2000);
+    check('Internet closing while another app has started stays put', !(await returned()));
+    check('The diary explains why it stayed put', (await current.evaluate(() => FrameDevice.eventLog().join('\n'))).includes('staying put'));
+    await closePage();
+    await page({ seed: baseline({ autoReturn: 'off' }) });
+    await current.evaluate(() => { __tv.running = ['org.tizen.browser']; __setHidden(true); });
+    await current.waitForTimeout(1200);
+    await current.evaluate(() => { __tv.running = []; });
+    await current.waitForTimeout(2000);
+    check('With auto-return off, Internet closing does nothing', !(await returned()));
+    await closePage();
+  });
   await run('Returns to CleanFrame when an opened app closes', async () => {
     const SELF = 'GzIyAIxWae.CleanFrame', returned = () => current.evaluate(id => __tv.calls.some(c => c.id === id), SELF);
     await page();

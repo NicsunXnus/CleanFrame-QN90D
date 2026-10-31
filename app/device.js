@@ -162,7 +162,48 @@
     }, POLL);
   }
   function bringBack(done) { launchApp(SELF, function (err) { note(err ? 'Return failed: ' + (err.detail || err.message) : 'Returned to CleanFrame'); if (done) done(err); }); }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) stopWatch(); });
+  /* Internet opened any other way (Smart Hub, Apps list, a remote button): while CleanFrame is
+     in the background with auto-return on, also watch the browser. If it closes and no other
+     app has started since, come back. If another app has started, the browser was probably
+     closed by the TV to free memory while that app is on screen, so stay put. */
+  var AMBIENT = { 'org.tizen.browser': 'Internet' }, ambient = null, ambientOn = false;
+  function userApps(list) {
+    return list.map(function (c) { return c.appId; }).filter(function (id) {
+      return id !== SELF && !/^com\.samsung\./.test(id) && !/Service$/i.test(id);
+    });
+  }
+  function stopAmbient() { if (ambient) { clearInterval(ambient.timer); ambient = null; } }
+  function startAmbient() {
+    var a = api();
+    stopAmbient();
+    if (!ambientOn || !a || typeof a.getAppsContext !== 'function') return;
+    var w = ambient = { seen: {}, timer: 0 };
+    w.timer = setInterval(function () {
+      if (ambient !== w) return;
+      try {
+        a.getAppsContext(function (list) {
+          if (ambient !== w) return;
+          var apps = userApps(list);
+          Object.keys(AMBIENT).forEach(function (id) {
+            if (ambient !== w || (watch && watch.id === id)) return;
+            var running = apps.indexOf(id) >= 0;
+            if (running) { if (!w.seen[id]) w.seen[id] = apps.slice(); return; }
+            if (!w.seen[id]) return;
+            var before = w.seen[id], newer = apps.filter(function (x) { return before.indexOf(x) < 0; });
+            delete w.seen[id];
+            if (newer.length) { note(AMBIENT[id] + ' closed while ' + newer[0] + ' was open, staying put'); return; }
+            note(AMBIENT[id] + ' closed, returning');
+            stopAmbient(); stopWatch();
+            bringBack();
+          });
+        }, function () {});
+      } catch (e) { stopAmbient(); }
+    }, POLL);
+  }
+  function setAmbient(on) { ambientOn = !!on; if (!ambientOn) stopAmbient(); else if (document.hidden) startAmbient(); }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { stopWatch(); stopAmbient(); } else startAmbient();
+  });
   /* One-press update: ask TizenBrew Installer's background service on this TV (its local
      WebSocket on port 8091, the same channel its own screen uses) to install the latest
      GitHub release. Every failure carries a short "what to try" so the person can fix it. */
@@ -229,5 +270,5 @@
   function eventLog() { return events.slice(); }
   function clearEvents() { events = []; try { localStorage.removeItem(EVENTS_KEY); } catch (e) {} note('Events cleared'); }
   function onEvent(fn) { listeners.push(fn); }
-  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, watchApp: watchApp, updateFromGitHub: updateFromGitHub, stopWatch: stopWatch, bringBack: bringBack, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
+  window.FrameDevice = { launch: launch, launchApp: launchApp, openApp: openApp, launchModule: launchModule, installer: installer, note: note, eventLog: eventLog, watchApp: watchApp, updateFromGitHub: updateFromGitHub, stopWatch: stopWatch, setAmbient: setAmbient, bringBack: bringBack, clearEvents: clearEvents, onEvent: onEvent, art: art, home: home, settings: settings, apps: apps };
 }());

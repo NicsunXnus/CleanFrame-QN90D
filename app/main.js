@@ -36,7 +36,7 @@
     { id: '5', name: 'Every 5 minutes', min: 5 }, { id: '15', name: 'Every 15 minutes', min: 15 },
     { id: '60', name: 'Every hour', min: 60 }
   ];
-  var VERSION = '0.7.9';
+  var VERSION = '0.8.0';
   var REPO = 'NicsunXnus/CleanFrame-QN90D';
   var KEY = 'cleanframe.home.v1', storageOk = true, catalog = { loading: false, loaded: false, error: null, request: 0, revision: 0 };
   var QA = window.ShoreQA = { minuteMs: window.ShoreQA && window.ShoreQA.minuteMs || 60000 };
@@ -918,7 +918,7 @@
       { action: 'samsung.update', label: 'Update CleanFrame', description: 'Experimental, likely won’t work. Type the repo instead' },
       { action: 'samsung.installer', label: 'TizenBrew Installer', description: 'Open it to install by hand or from USB' }
     ] }, { id: 'autoReturn', title: 'Return here when an app closes', horizontal: true, items: options('autoReturn', ['on', 'off']),
-      reason: 'Works for apps that close (mewatch, Internet, Stremio). Netflix and YouTube stay running, so use Home for those.' }];
+      reason: 'Works for apps that close, and for Internet however you open it while CleanFrame is in the background. Netflix and YouTube stay running.' }];
   }
   /* Event lines name the app where CleanFrame knows it; unknown IDs stay as they are. */
   var EVENT_NAMES = { 'com.samsung.tv.csfs': 'Samsung Home', 'GzIyAIxWae.CleanFrame': 'CleanFrame', 'xvvl3S1bvH.TizenBrewStandalone': 'TizenBrew' };
@@ -972,6 +972,7 @@
     c = next(S.c.home.slice(), S.c.recent.slice()); c.autoReturn = value;
     if (!write(c, 'Return when apps close')) S.lookError = { type: 'save', patch: { autoReturn: value }, row: 'autoReturn', transient: false };
     if (value === 'off') FrameDevice.stopWatch('Auto-return turned off');
+    FrameDevice.setAmbient(S.c.autoReturn === 'on');
     render();
   }
   function detailBack() { cancelLook(); S.err = null; pop(); }
@@ -1966,6 +1967,7 @@
   initialise();
   setLook({}, { transient: true, startup: true });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  FrameDevice.setAmbient(S.c.autoReturn === 'on');
   FrameDevice.onEvent(function () { var t = top(); if (t.id === 'appearance' && t.group === 'about') render(); });
   /* Soft entrance: CleanFrame starts behind a dark veil that fades once the Home picture and
      fonts are ready, and drops the veil again whenever it is hidden, so each return fades in
